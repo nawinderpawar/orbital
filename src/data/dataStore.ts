@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { OrbitalData, RepoEntry } from '../types';
+import { OrbitalData, RepoEntry, NoteEntry } from '../types';
 
 const ORBITAL_DIR = path.join(os.homedir(), '.orbital');
 const DATA_FILE = path.join(ORBITAL_DIR, 'data.json');
@@ -50,7 +50,7 @@ export class DataStore {
       id: generateId(),
       path: path.normalize(repoPath),
       alias,
-      notes: '',
+      notes: [],
       addedAt: new Date().toISOString(),
     };
     this.data.repos.push(entry);
@@ -68,10 +68,26 @@ export class DataStore {
     return false;
   }
 
-  updateNotes(id: string, notes: string): void {
+  addNote(id: string, text: string): NoteEntry | undefined {
     const repo = this.data.repos.find((r) => r.id === id);
     if (repo) {
-      repo.notes = notes;
+      // Migrate legacy string notes
+      if (!Array.isArray(repo.notes)) {
+        const old = repo.notes as unknown;
+        repo.notes = old ? [{ text: old as string, timestamp: new Date().toISOString() }] : [];
+      }
+      const entry: NoteEntry = { text, timestamp: new Date().toISOString() };
+      repo.notes.push(entry);
+      this.save();
+      return entry;
+    }
+    return undefined;
+  }
+
+  deleteNote(id: string, timestamp: string): void {
+    const repo = this.data.repos.find((r) => r.id === id);
+    if (repo && Array.isArray(repo.notes)) {
+      repo.notes = repo.notes.filter((n) => n.timestamp !== timestamp);
       this.save();
     }
   }

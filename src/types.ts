@@ -3,8 +3,14 @@ export interface RepoEntry {
   id: string;
   path: string;
   alias?: string;
-  notes?: string;
+  notes: NoteEntry[];
   addedAt: string;
+}
+
+/** A single timestamped note */
+export interface NoteEntry {
+  text: string;
+  timestamp: string;
 }
 
 /** Top-level persisted data structure */

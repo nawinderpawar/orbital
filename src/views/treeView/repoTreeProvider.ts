@@ -88,10 +88,17 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       children.push(new InfoNode('Clean working tree', 'pass-filled', 'charts.green', 'No uncommitted changes'));
     }
 
-    // Notes
-    if (repo.notes) {
-      const snippet = repo.notes.length > 60 ? repo.notes.substring(0, 57) + '...' : repo.notes;
-      children.push(new InfoNode(snippet, 'bookmark', 'charts.blue', repo.notes));
+    // Notes — show latest entry
+    if (repo.notes && repo.notes.length > 0) {
+      const latest = repo.notes[repo.notes.length - 1];
+      const snippet = latest.text.length > 60 ? latest.text.substring(0, 57) + '...' : latest.text;
+      const allNotes = repo.notes.map((n) => `[${new Date(n.timestamp).toLocaleString()}] ${n.text}`).join('\n');
+      children.push(new InfoNode(
+        `${snippet}  (${repo.notes.length} note${repo.notes.length > 1 ? 's' : ''})`,
+        'bookmark',
+        'charts.blue',
+        allNotes
+      ));
     }
 
     // Worktrees (skip the main worktree which is the repo itself)

@@ -36,8 +36,15 @@ export class DashboardProvider {
 
     this.panel.webview.onDidReceiveMessage(async (msg) => {
       switch (msg.command) {
-        case 'saveNotes':
-          this.dataStore.updateNotes(msg.repoId, msg.notes);
+        case 'addNote': {
+          const note = this.dataStore.addNote(msg.repoId, msg.text);
+          if (note && this.panel) {
+            this.panel.webview.postMessage({ command: 'noteAdded', repoId: msg.repoId, note });
+          }
+          break;
+        }
+        case 'deleteNote':
+          this.dataStore.deleteNote(msg.repoId, msg.timestamp);
           break;
         case 'removeRepo':
           this.dataStore.removeRepo(msg.repoId);
@@ -113,6 +120,7 @@ export class DashboardProvider {
       --badge-behind: #ce9178;
       --badge-dirty: #f48771;
       --badge-clean: #89d185;
+      --note-border: var(--vscode-textSeparator-foreground, rgba(128,128,128,0.35));
     }
     body {
       font-family: var(--vscode-font-family);
@@ -181,19 +189,130 @@ export class DashboardProvider {
       font-size: 0.85em;
       padding: 2px 0;
     }
-    .notes-area {
-      width: 100%;
-      min-height: 50px;
+    .commit-info {
+      font-size: 0.82em;
+      opacity: 0.7;
+      font-family: var(--vscode-editor-font-family);
+    }
+
+    /* ── Notes Journal ─────────────────────────────── */
+    .notes-section {
+      margin-top: 8px;
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .notes-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: var(--vscode-sideBarSectionHeader-background, rgba(128,128,128,0.1));
+      cursor: pointer;
+      user-select: none;
+    }
+    .notes-header:hover {
+      opacity: 0.85;
+    }
+    .notes-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      font-size: 0.85em;
+    }
+    .notes-toggle {
+      font-size: 0.75em;
+      opacity: 0.6;
+    }
+    .notes-count {
+      font-size: 0.8em;
+      opacity: 0.6;
+      font-weight: normal;
+    }
+    .notes-body {
+      max-height: 300px;
+      overflow-y: auto;
+      transition: max-height 0.2s ease;
+    }
+    .notes-body.collapsed {
+      max-height: 0;
+      overflow: hidden;
+    }
+    .note-input-row {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--note-border);
+    }
+    .note-input {
+      flex: 1;
       background: var(--vscode-input-background);
       color: var(--vscode-input-foreground);
       border: 1px solid var(--vscode-input-border);
-      border-radius: 4px;
-      padding: 6px;
+      border-radius: 3px;
+      padding: 5px 8px;
       font-family: var(--vscode-font-family);
       font-size: var(--vscode-font-size);
-      resize: vertical;
-      box-sizing: border-box;
+      outline: none;
     }
+    .note-input:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+    .note-input::placeholder {
+      opacity: 0.5;
+    }
+    .note-entry {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--note-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .note-entry:last-child {
+      border-bottom: none;
+    }
+    .note-content {
+      flex: 1;
+    }
+    .note-text {
+      font-size: 0.9em;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .note-timestamp {
+      font-size: 0.75em;
+      opacity: 0.5;
+      margin-top: 2px;
+    }
+    .note-delete {
+      opacity: 0;
+      background: none;
+      border: none;
+      color: var(--vscode-foreground);
+      cursor: pointer;
+      font-size: 0.8em;
+      padding: 2px 4px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .note-entry:hover .note-delete {
+      opacity: 0.5;
+    }
+    .note-delete:hover {
+      opacity: 1 !important;
+      background: var(--badge-dirty);
+      color: #000;
+    }
+    .notes-empty {
+      padding: 12px 10px;
+      text-align: center;
+      opacity: 0.4;
+      font-size: 0.85em;
+    }
+
     .actions {
       display: flex;
       gap: 6px;
@@ -215,11 +334,6 @@ export class DashboardProvider {
       background: var(--badge-dirty);
       color: #000;
     }
-    .commit-info {
-      font-size: 0.82em;
-      opacity: 0.7;
-      font-family: var(--vscode-editor-font-family);
-    }
   </style>
 </head>
 <body>
@@ -227,34 +341,86 @@ export class DashboardProvider {
   <script>
     const vscode = acquireVsCodeApi();
 
-    function saveNotes(repoId) {
-      const el = document.getElementById('notes-' + repoId);
-      if (el) {
-        vscode.postMessage({ command: 'saveNotes', repoId, notes: el.value });
-      }
-    }
-
     function removeRepo(repoId) {
       vscode.postMessage({ command: 'removeRepo', repoId });
     }
-
     function openFolder(path) {
       vscode.postMessage({ command: 'openFolder', path });
     }
-
     function openTerminal(repoId) {
       vscode.postMessage({ command: 'openTerminal', repoId });
     }
 
-    // Auto-save notes on blur
-    document.querySelectorAll('.notes-area').forEach(el => {
-      el.addEventListener('blur', () => {
-        const repoId = el.dataset.repoid;
-        if (repoId) {
-          vscode.postMessage({ command: 'saveNotes', repoId, notes: el.value });
+    // Toggle notes collapse
+    function toggleNotes(repoId) {
+      const body = document.getElementById('notes-body-' + repoId);
+      const toggle = document.getElementById('notes-toggle-' + repoId);
+      if (body && toggle) {
+        body.classList.toggle('collapsed');
+        toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
+      }
+    }
+
+    // Add note on Enter
+    document.querySelectorAll('.note-input').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          const text = input.value.trim();
+          if (!text) return;
+          const repoId = input.dataset.repoid;
+          vscode.postMessage({ command: 'addNote', repoId, text });
+          input.value = '';
         }
       });
     });
+
+    // Delete note
+    function deleteNote(repoId, timestamp) {
+      vscode.postMessage({ command: 'deleteNote', repoId, timestamp });
+      const el = document.getElementById('note-' + repoId + '-' + CSS.escape(timestamp));
+      if (el) el.remove();
+      // Update count
+      const countEl = document.getElementById('notes-count-' + repoId);
+      const listEl = document.getElementById('notes-body-' + repoId);
+      if (countEl && listEl) {
+        const remaining = listEl.querySelectorAll('.note-entry').length;
+        countEl.textContent = remaining > 0 ? remaining + ' note' + (remaining > 1 ? 's' : '') : '';
+      }
+    }
+
+    // Handle noteAdded from extension
+    window.addEventListener('message', (event) => {
+      const msg = event.data;
+      if (msg.command === 'noteAdded') {
+        const list = document.getElementById('notes-list-' + msg.repoId);
+        const emptyMsg = document.getElementById('notes-empty-' + msg.repoId);
+        if (emptyMsg) emptyMsg.remove();
+        if (list) {
+          const ts = new Date(msg.note.timestamp);
+          const div = document.createElement('div');
+          div.className = 'note-entry';
+          div.id = 'note-' + msg.repoId + '-' + msg.note.timestamp;
+          div.innerHTML =
+            '<div class="note-content">' +
+              '<div class="note-text">' + escHtml(msg.note.text) + '</div>' +
+              '<div class="note-timestamp">' + ts.toLocaleString() + '</div>' +
+            '</div>' +
+            '<button class="note-delete" onclick="deleteNote(\\'' + msg.repoId + '\\', \\'' + msg.note.timestamp + '\\')">✕</button>';
+          list.insertBefore(div, list.firstChild);
+          // Update count
+          const countEl = document.getElementById('notes-count-' + msg.repoId);
+          if (countEl) {
+            const total = list.querySelectorAll('.note-entry').length;
+            countEl.textContent = total + ' note' + (total > 1 ? 's' : '');
+          }
+        }
+      }
+    });
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
   </script>
 </body>
 </html>`;
@@ -298,6 +464,23 @@ export class DashboardProvider {
       ? `<div class="commit-info">${this.escHtml(s.lastCommit.hash)} ${this.escHtml(s.lastCommit.message)} (${this.escHtml(s.lastCommit.relativeTime)})</div>`
       : '';
 
+    // Notes journal — newest first
+    const notes = Array.isArray(entry.notes) ? entry.notes : [];
+    const sortedNotes = [...notes].reverse();
+    const noteCount = sortedNotes.length;
+    const notesListHtml = noteCount > 0
+      ? sortedNotes.map((n) => {
+          const ts = new Date(n.timestamp);
+          return `<div class="note-entry" id="note-${entry.id}-${this.escHtml(n.timestamp)}">
+            <div class="note-content">
+              <div class="note-text">${this.escHtml(n.text)}</div>
+              <div class="note-timestamp">${this.escHtml(ts.toLocaleString())}</div>
+            </div>
+            <button class="note-delete" onclick="deleteNote('${entry.id}', '${this.escAttr(n.timestamp)}')">✕</button>
+          </div>`;
+        }).join('')
+      : `<div class="notes-empty" id="notes-empty-${entry.id}">No notes yet. Type below and press Enter.</div>`;
+
     return `<div class="card">
       <div class="card-header">
         <h3>${this.escHtml(name)}</h3>
@@ -306,9 +489,22 @@ export class DashboardProvider {
       <div class="badges">${badges.join('')}</div>
       ${wtHtml}
       ${commitHtml}
-      <div class="section">
-        <div class="section-title">Notes</div>
-        <textarea class="notes-area" id="notes-${entry.id}" data-repoid="${entry.id}">${this.escHtml(entry.notes || '')}</textarea>
+      <div class="notes-section">
+        <div class="notes-header" onclick="toggleNotes('${entry.id}')">
+          <div class="notes-header-left">
+            <span class="notes-toggle" id="notes-toggle-${entry.id}">▼</span>
+            <span>📝 Notes</span>
+            <span class="notes-count" id="notes-count-${entry.id}">${noteCount > 0 ? noteCount + ' note' + (noteCount > 1 ? 's' : '') : ''}</span>
+          </div>
+        </div>
+        <div class="notes-body" id="notes-body-${entry.id}">
+          <div class="note-input-row">
+            <input type="text" class="note-input" data-repoid="${entry.id}" placeholder="Add a note... (Enter to save)" />
+          </div>
+          <div id="notes-list-${entry.id}">
+            ${notesListHtml}
+          </div>
+        </div>
       </div>
       <div class="actions">
         <button onclick="openFolder('${this.escAttr(entry.path)}')">📂 Open Folder</button>

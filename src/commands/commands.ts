@@ -71,13 +71,12 @@ export function registerCommands(
       if (!repo) {return;}
 
       const notes = await vscode.window.showInputBox({
-        prompt: `Notes for ${repo.alias || path.basename(repo.path)}`,
-        value: repo.notes || '',
-        placeHolder: 'Enter workstream notes...',
+        prompt: `Add note for ${repo.alias || path.basename(repo.path)}`,
+        placeHolder: 'Type a note and press Enter...',
       });
-      if (notes === undefined) {return;} // cancelled
+      if (!notes) {return;} // cancelled or empty
 
-      dataStore.updateNotes(repoId, notes);
+      dataStore.addNote(repoId, notes);
       treeProvider.refresh();
       dashboardProvider.refresh();
     }),
