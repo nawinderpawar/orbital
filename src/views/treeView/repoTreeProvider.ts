@@ -54,33 +54,44 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     const children: TreeNode[] = [];
 
     // Branch + sync
-    let branchLabel = status.isDetachedHead
+    const branchLabel = status.isDetachedHead
       ? `HEAD (detached)`
       : status.branch;
 
     if (status.hasUpstream) {
       if (status.ahead === 0 && status.behind === 0) {
-        branchLabel += '  ✅ in sync';
+        children.push(new InfoNode(branchLabel, 'git-branch', 'charts.green', '✓ In sync with remote'));
       } else {
-        if (status.ahead > 0) {branchLabel += `  ⬆${status.ahead}`;}
-        if (status.behind > 0) {branchLabel += `  ⬇${status.behind}`;}
+        const syncParts: string[] = [];
+        if (status.ahead > 0) {syncParts.push(`${status.ahead} ahead`);}
+        if (status.behind > 0) {syncParts.push(`${status.behind} behind`);}
+        children.push(new InfoNode(
+          `${branchLabel}  ⬆${status.ahead} ⬇${status.behind}`,
+          'git-branch',
+          'charts.yellow',
+          `Out of sync: ${syncParts.join(', ')}`
+        ));
       }
     } else {
-      branchLabel += '  (no upstream)';
+      children.push(new InfoNode(`${branchLabel}  (no upstream)`, 'git-branch', 'disabledForeground', 'No upstream tracking branch configured'));
     }
-    children.push(new InfoNode(branchLabel, 'git-branch'));
 
     // Dirty status
     if (status.dirtyFileCount > 0) {
-      children.push(new InfoNode(`${status.dirtyFileCount} uncommitted change(s)`, 'warning'));
+      children.push(new InfoNode(
+        `${status.dirtyFileCount} uncommitted change(s)`,
+        'circle-filled',
+        'charts.red',
+        `${status.dirtyFileCount} file(s) with uncommitted changes`
+      ));
     } else {
-      children.push(new InfoNode('Clean working tree', 'check'));
+      children.push(new InfoNode('Clean working tree', 'pass-filled', 'charts.green', 'No uncommitted changes'));
     }
 
     // Notes
     if (repo.notes) {
       const snippet = repo.notes.length > 60 ? repo.notes.substring(0, 57) + '...' : repo.notes;
-      children.push(new InfoNode(`📝 ${snippet}`, 'note'));
+      children.push(new InfoNode(snippet, 'bookmark', 'charts.blue', repo.notes));
     }
 
     // Worktrees (skip the main worktree which is the repo itself)
@@ -89,18 +100,23 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     );
     if (extraWorktrees.length > 0) {
       for (const wt of extraWorktrees) {
-        children.push(new InfoNode(`🌳 ${wt.branch || 'detached'} → ${wt.path}`, 'git-branch'));
+        children.push(new InfoNode(
+          `${wt.branch || 'detached'} → ${path.basename(wt.path)}`,
+          'list-tree',
+          'charts.purple',
+          `Worktree: ${wt.path}`
+        ));
       }
     }
 
     // Last commit
     if (status.lastCommit) {
-      children.push(
-        new InfoNode(
-          `${status.lastCommit.hash} ${status.lastCommit.message} (${status.lastCommit.relativeTime})`,
-          'git-commit'
-        )
-      );
+      children.push(new InfoNode(
+        `${status.lastCommit.hash} ${status.lastCommit.message}`,
+        'git-commit',
+        'descriptionForeground',
+        `Last commit: ${status.lastCommit.hash} ${status.lastCommit.message} (${status.lastCommit.relativeTime})`
+      ));
     }
 
     return children;
@@ -124,7 +140,15 @@ class RepoNode extends vscode.TreeItem {
     this.repoId = repo.id;
     this.contextValue = 'repo';
     this.tooltip = repo.path;
-    this.iconPath = new vscode.ThemeIcon('repo');
+
+    // Color the repo icon based on overall health
+    if (status.error) {
+      this.iconPath = new vscode.ThemeIcon('repo', new vscode.ThemeColor('charts.red'));
+    } else if (status.dirtyFileCount > 0 || status.behind > 0) {
+      this.iconPath = new vscode.ThemeIcon('repo', new vscode.ThemeColor('charts.yellow'));
+    } else {
+      this.iconPath = new vscode.ThemeIcon('repo', new vscode.ThemeColor('charts.green'));
+    }
 
     // Description: branch + quick status
     const parts: string[] = [status.branch];
@@ -138,9 +162,14 @@ class RepoNode extends vscode.TreeItem {
 }
 
 class InfoNode extends vscode.TreeItem {
-  constructor(label: string, icon: string) {
+  constructor(label: string, icon: string, color?: string, tooltipText?: string) {
     super(label, vscode.TreeItemCollapsibleState.None);
-    this.iconPath = new vscode.ThemeIcon(icon);
+    this.iconPath = color
+      ? new vscode.ThemeIcon(icon, new vscode.ThemeColor(color))
+      : new vscode.ThemeIcon(icon);
+    if (tooltipText) {
+      this.tooltip = tooltipText;
+    }
   }
 }
 
