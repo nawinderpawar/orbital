@@ -92,6 +92,14 @@ export class DataStore {
     }
   }
 
+  clearNotes(id: string): void {
+    const repo = this.data.repos.find((r) => r.id === id);
+    if (repo) {
+      repo.notes = [];
+      this.save();
+    }
+  }
+
   setAlias(id: string, alias: string): void {
     const repo = this.data.repos.find((r) => r.id === id);
     if (repo) {

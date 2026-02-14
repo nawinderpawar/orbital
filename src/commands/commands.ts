@@ -131,6 +131,25 @@ export function registerCommands(
       dataStore.setAlias(repoId, alias);
       treeProvider.refresh();
       dashboardProvider.refresh();
+    }),
+
+    // ── Clear All Notes ──────────────────────────────
+    vscode.commands.registerCommand('orbital.clearNotes', async (item?: { repoId?: string }) => {
+      const repoId = await resolveRepoId(item?.repoId, dataStore);
+      if (!repoId) {return;}
+      const repo = dataStore.getRepo(repoId);
+      if (!repo) {return;}
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Clear all notes for "${repo.alias || path.basename(repo.path)}"?`,
+        { modal: true },
+        'Clear All Notes'
+      );
+      if (confirm !== 'Clear All Notes') {return;}
+
+      dataStore.clearNotes(repoId);
+      treeProvider.refresh();
+      dashboardProvider.refresh();
     })
   );
 }

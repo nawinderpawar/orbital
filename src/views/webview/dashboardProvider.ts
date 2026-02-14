@@ -46,6 +46,10 @@ export class DashboardProvider {
         case 'deleteNote':
           this.dataStore.deleteNote(msg.repoId, msg.timestamp);
           break;
+        case 'clearNotes':
+          this.dataStore.clearNotes(msg.repoId);
+          this.refresh();
+          break;
         case 'removeRepo':
           this.dataStore.removeRepo(msg.repoId);
           this.refresh();
@@ -230,6 +234,21 @@ export class DashboardProvider {
       opacity: 0.6;
       font-weight: normal;
     }
+    .notes-clear-btn {
+      background: none;
+      border: none;
+      color: var(--vscode-foreground);
+      opacity: 0.4;
+      cursor: pointer;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .notes-clear-btn:hover {
+      opacity: 1;
+      background: var(--badge-dirty);
+      color: #000;
+    }
     .notes-body {
       max-height: 300px;
       overflow-y: auto;
@@ -349,6 +368,11 @@ export class DashboardProvider {
     }
     function openTerminal(repoId) {
       vscode.postMessage({ command: 'openTerminal', repoId });
+    }
+    function clearNotes(repoId) {
+      if (confirm('Clear all notes for this repository?')) {
+        vscode.postMessage({ command: 'clearNotes', repoId });
+      }
     }
 
     // Toggle notes collapse
@@ -490,12 +514,13 @@ export class DashboardProvider {
       ${wtHtml}
       ${commitHtml}
       <div class="notes-section">
-        <div class="notes-header" onclick="toggleNotes('${entry.id}')">
-          <div class="notes-header-left">
+        <div class="notes-header">
+          <div class="notes-header-left" onclick="toggleNotes('${entry.id}')">
             <span class="notes-toggle" id="notes-toggle-${entry.id}">▼</span>
             <span>📝 Notes</span>
             <span class="notes-count" id="notes-count-${entry.id}">${noteCount > 0 ? noteCount + ' note' + (noteCount > 1 ? 's' : '') : ''}</span>
           </div>
+          ${noteCount > 0 ? `<button class="notes-clear-btn" onclick="clearNotes('${entry.id}')" title="Clear all notes">🗑 Clear</button>` : ''}
         </div>
         <div class="notes-body" id="notes-body-${entry.id}">
           <div class="note-input-row">

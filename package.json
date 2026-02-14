@@ -81,6 +81,11 @@
         "command": "orbital.setAlias",
         "title": "Orbital: Set Alias",
         "icon": "$(tag)"
+      },
+      {
+        "command": "orbital.clearNotes",
+        "title": "Orbital: Clear All Notes",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -123,6 +128,10 @@
         },
         {
           "command": "orbital.removeRepo",
+          "when": "view == orbital.repoTree && viewItem == repo"
+        },
+        {
+          "command": "orbital.clearNotes",
           "when": "view == orbital.repoTree && viewItem == repo"
         }
       ]
