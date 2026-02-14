@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { DataStore } from '../../data/dataStore';
 import { GitService } from '../../git/gitService';
 import { RepoView } from '../../types';
 
-export class DashboardProvider implements vscode.WebviewViewProvider {
-  private view?: vscode.WebviewView;
+export class DashboardProvider {
+  private panel?: vscode.WebviewPanel;
 
   constructor(
     private extensionUri: vscode.Uri,
@@ -12,19 +13,28 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
     private gitService: GitService
   ) {}
 
-  resolveWebviewView(
-    webviewView: vscode.WebviewView,
-    _context: vscode.WebviewViewResolveContext,
-    _token: vscode.CancellationToken
-  ): void {
-    this.view = webviewView;
+  /** Open (or reveal) the dashboard in the main editor area */
+  async open(): Promise<void> {
+    if (this.panel) {
+      this.panel.reveal(vscode.ViewColumn.One);
+      await this.updateHtml();
+      return;
+    }
 
-    webviewView.webview.options = {
-      enableScripts: true,
-      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
-    };
+    this.panel = vscode.window.createWebviewPanel(
+      'orbital.dashboard',
+      '🛸 Orbital Dashboard',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media')],
+      }
+    );
 
-    webviewView.webview.onDidReceiveMessage(async (msg) => {
+    this.panel.iconPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'orbital.svg');
+
+    this.panel.webview.onDidReceiveMessage(async (msg) => {
       switch (msg.command) {
         case 'saveNotes':
           this.dataStore.updateNotes(msg.repoId, msg.notes);
@@ -44,7 +54,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
           const repo = this.dataStore.getRepo(msg.repoId);
           if (repo) {
             const terminal = vscode.window.createTerminal({
-              name: `Orbital: ${repo.alias || require('path').basename(repo.path)}`,
+              name: `Orbital: ${repo.alias || path.basename(repo.path)}`,
               cwd: repo.path,
             });
             terminal.show();
@@ -57,7 +67,11 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
       }
     });
 
-    this.updateHtml();
+    this.panel.onDidDispose(() => {
+      this.panel = undefined;
+    });
+
+    await this.updateHtml();
   }
 
   async refresh(): Promise<void> {
@@ -65,7 +79,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
   }
 
   private async updateHtml(): Promise<void> {
-    if (!this.view) {return;}
+    if (!this.panel) {return;}
 
     const repos = this.dataStore.getRepos();
     const views: RepoView[] = [];
@@ -75,7 +89,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
       views.push({ entry, status });
     }
 
-    this.view.webview.html = this.buildHtml(views);
+    this.panel.webview.html = this.buildHtml(views);
   }
 
   private buildHtml(repos: RepoView[]): string {
@@ -248,7 +262,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
 
   private buildCard(rv: RepoView): string {
     const { entry, status } = rv;
-    const name = entry.alias || require('path').basename(entry.path);
+    const name = entry.alias || path.basename(entry.path);
     const s = status!;
 
     // Badges
@@ -270,7 +284,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
 
     // Worktrees
     const extraWt = s.worktrees.filter(
-      (w) => require('path').normalize(w.path) !== require('path').normalize(entry.path)
+      (w) => path.normalize(w.path) !== path.normalize(entry.path)
     );
     const wtHtml = extraWt.length > 0
       ? `<div class="section">

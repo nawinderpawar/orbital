@@ -20,12 +20,6 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
 
-  // Register the Webview
-  const webviewRegistration = vscode.window.registerWebviewViewProvider(
-    'orbital.dashboard',
-    dashboardProvider
-  );
-
   // Register all commands
   registerCommands(context, dataStore, gitService, treeProvider, dashboardProvider);
 
@@ -50,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  context.subscriptions.push(treeView, webviewRegistration);
+  context.subscriptions.push(treeView);
 }
 
 export function deactivate() {

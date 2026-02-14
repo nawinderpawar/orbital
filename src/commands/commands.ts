@@ -90,7 +90,7 @@ export function registerCommands(
 
     // ── Open Dashboard ────────────────────────────────
     vscode.commands.registerCommand('orbital.openDashboard', () => {
-      vscode.commands.executeCommand('orbital.dashboard.focus');
+      dashboardProvider.open();
     }),
 
     // ── Open Repo Folder ──────────────────────────────
