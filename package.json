@@ -38,6 +38,11 @@
         {
           "id": "orbital.repoTree",
           "name": "Repositories"
+        },
+        {
+          "id": "orbital.dashboard",
+          "name": "Dashboard",
+          "type": "webview"
         }
       ]
     },
