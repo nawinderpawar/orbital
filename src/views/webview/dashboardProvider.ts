@@ -50,6 +50,18 @@ export class DashboardProvider {
           this.dataStore.clearNotes(msg.repoId);
           this.refresh();
           break;
+        case 'archiveNotes': {
+          const archiveFile = this.dataStore.archiveNotes(msg.repoId);
+          if (archiveFile && this.panel) {
+            this.panel.webview.postMessage({
+              command: 'archiveComplete',
+              repoId: msg.repoId,
+              archiveFile,
+            });
+          }
+          this.refresh();
+          break;
+        }
         case 'removeRepo':
           this.dataStore.removeRepo(msg.repoId);
           this.refresh();
@@ -155,6 +167,22 @@ export class DashboardProvider {
       margin: 0;
       font-size: 1.1em;
     }
+    .header-remove-btn {
+      background: none;
+      border: none;
+      color: var(--vscode-foreground);
+      opacity: 0.3;
+      cursor: pointer;
+      font-size: 1em;
+      padding: 2px 6px;
+      border-radius: 3px;
+      line-height: 1;
+    }
+    .header-remove-btn:hover {
+      opacity: 1;
+      background: var(--badge-dirty);
+      color: #000;
+    }
     .card-path {
       font-size: 0.85em;
       opacity: 0.6;
@@ -234,20 +262,20 @@ export class DashboardProvider {
       opacity: 0.6;
       font-weight: normal;
     }
-    .notes-clear-btn {
+    .notes-archive-btn {
       background: none;
       border: none;
       color: var(--vscode-foreground);
-      opacity: 0.4;
+      opacity: 0.5;
       cursor: pointer;
       font-size: 0.8em;
       padding: 2px 6px;
       border-radius: 3px;
     }
-    .notes-clear-btn:hover {
+    .notes-archive-btn:hover {
       opacity: 1;
-      background: var(--badge-dirty);
-      color: #000;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
     }
     .notes-body {
       max-height: 300px;
@@ -369,9 +397,9 @@ export class DashboardProvider {
     function openTerminal(repoId) {
       vscode.postMessage({ command: 'openTerminal', repoId });
     }
-    function clearNotes(repoId) {
-      if (confirm('Clear all notes for this repository?')) {
-        vscode.postMessage({ command: 'clearNotes', repoId });
+    function archiveNotes(repoId) {
+      if (confirm('Archive all notes to file and start fresh?')) {
+        vscode.postMessage({ command: 'archiveNotes', repoId });
       }
     }
 
@@ -508,6 +536,7 @@ export class DashboardProvider {
     return `<div class="card">
       <div class="card-header">
         <h3>${this.escHtml(name)}</h3>
+        <button class="header-remove-btn" onclick="removeRepo('${entry.id}')" title="Remove from Orbital">✕</button>
       </div>
       <div class="card-path">${this.escHtml(entry.path)}</div>
       <div class="badges">${badges.join('')}</div>
@@ -520,7 +549,7 @@ export class DashboardProvider {
             <span>📝 Notes</span>
             <span class="notes-count" id="notes-count-${entry.id}">${noteCount > 0 ? noteCount + ' note' + (noteCount > 1 ? 's' : '') : ''}</span>
           </div>
-          ${noteCount > 0 ? `<button class="notes-clear-btn" onclick="clearNotes('${entry.id}')" title="Clear all notes">🗑 Clear</button>` : ''}
+          ${noteCount > 0 ? `<button class="notes-archive-btn" onclick="archiveNotes('${entry.id}')" title="Archive notes to file and clear">📦 Archive</button>` : ''}
         </div>
         <div class="notes-body" id="notes-body-${entry.id}">
           <div class="note-input-row">
@@ -534,7 +563,6 @@ export class DashboardProvider {
       <div class="actions">
         <button onclick="openFolder('${this.escAttr(entry.path)}')">📂 Open Folder</button>
         <button onclick="openTerminal('${entry.id}')">💻 Terminal</button>
-        <button class="danger" onclick="removeRepo('${entry.id}')">🗑 Remove</button>
       </div>
     </div>`;
   }

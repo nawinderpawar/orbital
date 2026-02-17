@@ -150,6 +150,33 @@ export function registerCommands(
       dataStore.clearNotes(repoId);
       treeProvider.refresh();
       dashboardProvider.refresh();
+    }),
+
+    // ── Archive Notes ────────────────────────────────
+    vscode.commands.registerCommand('orbital.archiveNotes', async (item?: { repoId?: string }) => {
+      const repoId = await resolveRepoId(item?.repoId, dataStore);
+      if (!repoId) {return;}
+      const repo = dataStore.getRepo(repoId);
+      if (!repo) {return;}
+
+      if (!repo.notes || repo.notes.length === 0) {
+        vscode.window.showInformationMessage('No notes to archive.');
+        return;
+      }
+
+      const confirm = await vscode.window.showWarningMessage(
+        `Archive ${repo.notes.length} note(s) for "${repo.alias || path.basename(repo.path)}"? Notes will be saved to ~/.orbital/archives/ and cleared.`,
+        { modal: true },
+        'Archive Notes'
+      );
+      if (confirm !== 'Archive Notes') {return;}
+
+      const archiveFile = dataStore.archiveNotes(repoId);
+      if (archiveFile) {
+        vscode.window.showInformationMessage(`Notes archived to ${archiveFile}`);
+      }
+      treeProvider.refresh();
+      dashboardProvider.refresh();
     })
   );
 }

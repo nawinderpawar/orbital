@@ -86,6 +86,11 @@
         "command": "orbital.clearNotes",
         "title": "Orbital: Clear All Notes",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "orbital.archiveNotes",
+        "title": "Orbital: Archive Notes",
+        "icon": "$(archive)"
       }
     ],
     "menus": {
@@ -132,6 +137,10 @@
         },
         {
           "command": "orbital.clearNotes",
+          "when": "view == orbital.repoTree && viewItem == repo"
+        },
+        {
+          "command": "orbital.archiveNotes",
           "when": "view == orbital.repoTree && viewItem == repo"
         }
       ]

@@ -100,6 +100,37 @@ export class DataStore {
     }
   }
 
+  /** Archive notes to ~/.orbital/archives/ and clear active notes */
+  archiveNotes(id: string): string | undefined {
+    const repo = this.data.repos.find((r) => r.id === id);
+    if (!repo || !Array.isArray(repo.notes) || repo.notes.length === 0) {
+      return undefined;
+    }
+
+    const archiveDir = path.join(ORBITAL_DIR, 'archives');
+    if (!fs.existsSync(archiveDir)) {
+      fs.mkdirSync(archiveDir, { recursive: true });
+    }
+
+    const safeName = (repo.alias || path.basename(repo.path))
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .substring(0, 50);
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    const archiveFile = path.join(archiveDir, `${safeName}_${ts}.json`);
+
+    const archive = {
+      repoPath: repo.path,
+      alias: repo.alias,
+      archivedAt: new Date().toISOString(),
+      notes: repo.notes,
+    };
+    fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2), 'utf-8');
+
+    repo.notes = [];
+    this.save();
+    return archiveFile;
+  }
+
   setAlias(id: string, alias: string): void {
     const repo = this.data.repos.find((r) => r.id === id);
     if (repo) {

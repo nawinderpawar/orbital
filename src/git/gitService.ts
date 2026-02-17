@@ -3,7 +3,7 @@ import { RepoStatus, WorktreeInfo, CommitSummary } from '../types';
 
 function git(repoPath: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('git', ['-C', repoPath, ...args], { timeout: 10000 }, (err, stdout, stderr) => {
+    execFile('git', ['-C', repoPath, ...args], { timeout: 10000, shell: true }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr.trim() || err.message));
       } else {
