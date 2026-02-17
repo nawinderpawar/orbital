@@ -151,6 +151,41 @@ export class DashboardProvider {
       padding: 8px;
       margin: 0;
     }
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 4px 0 8px 0;
+      gap: 6px;
+    }
+    .toolbar button {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.85em;
+    }
+    .toolbar button:hover {
+      background: var(--vscode-button-secondaryHoverBackground);
+    }
+    .toolbar button.active {
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+    }
+    .cards-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .cards-container.grid-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .cards-container.grid-layout .card {
+      margin-bottom: 0;
+    }
     .empty {
       text-align: center;
       padding: 40px 16px;
@@ -390,9 +425,35 @@ export class DashboardProvider {
   </style>
 </head>
 <body>
-  ${cardsHtml}
+  <div class="toolbar">
+    <button id="btn-list" onclick="setLayout('list')" title="Single column">☰ List</button>
+    <button id="btn-grid" onclick="setLayout('grid')" title="Two column grid">▦ Grid</button>
+  </div>
+  <div class="cards-container" id="cards-container">
+    ${cardsHtml}
+  </div>
   <script>
     const vscode = acquireVsCodeApi();
+
+    // Layout toggle with persistence
+    function setLayout(mode) {
+      const container = document.getElementById('cards-container');
+      const btnList = document.getElementById('btn-list');
+      const btnGrid = document.getElementById('btn-grid');
+      if (mode === 'grid') {
+        container.classList.add('grid-layout');
+        btnGrid.classList.add('active');
+        btnList.classList.remove('active');
+      } else {
+        container.classList.remove('grid-layout');
+        btnList.classList.add('active');
+        btnGrid.classList.remove('active');
+      }
+      vscode.setState({ layout: mode });
+    }
+    // Restore saved layout
+    const savedState = vscode.getState();
+    setLayout(savedState && savedState.layout === 'grid' ? 'grid' : 'list');
 
     function removeRepo(repoId) {
       vscode.postMessage({ command: 'removeRepo', repoId });
