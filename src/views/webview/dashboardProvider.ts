@@ -51,13 +51,19 @@ export class DashboardProvider {
           this.refresh();
           break;
         case 'archiveNotes': {
+          const archiveRepo = this.dataStore.getRepo(msg.repoId);
+          const repoName = archiveRepo
+            ? archiveRepo.alias || require('path').basename(archiveRepo.path)
+            : 'this repository';
+          const confirm = await vscode.window.showWarningMessage(
+            `Archive all notes for "${repoName}" and start fresh?`,
+            { modal: true },
+            'Archive Notes'
+          );
+          if (confirm !== 'Archive Notes') {break;}
           const archiveFile = this.dataStore.archiveNotes(msg.repoId);
-          if (archiveFile && this.panel) {
-            this.panel.webview.postMessage({
-              command: 'archiveComplete',
-              repoId: msg.repoId,
-              archiveFile,
-            });
+          if (archiveFile) {
+            vscode.window.showInformationMessage(`Notes archived to ${archiveFile}`);
           }
           this.refresh();
           break;
@@ -398,9 +404,7 @@ export class DashboardProvider {
       vscode.postMessage({ command: 'openTerminal', repoId });
     }
     function archiveNotes(repoId) {
-      if (confirm('Archive all notes to file and start fresh?')) {
-        vscode.postMessage({ command: 'archiveNotes', repoId });
-      }
+      vscode.postMessage({ command: 'archiveNotes', repoId });
     }
 
     // Toggle notes collapse
