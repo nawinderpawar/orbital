@@ -470,6 +470,17 @@ export class DashboardProvider {
             const total = list.querySelectorAll('.note-entry').length;
             countEl.textContent = total + ' note' + (total > 1 ? 's' : '');
           }
+          // Show archive button if first note
+          const archiveSpot = document.getElementById('notes-archive-' + msg.repoId);
+          if (archiveSpot && archiveSpot.tagName === 'SPAN') {
+            const btn = document.createElement('button');
+            btn.className = 'notes-archive-btn';
+            btn.id = 'notes-archive-' + msg.repoId;
+            btn.title = 'Archive notes to file and clear';
+            btn.textContent = '📦 Archive';
+            btn.onclick = () => archiveNotes(msg.repoId);
+            archiveSpot.replaceWith(btn);
+          }
         }
       }
     });
@@ -553,7 +564,7 @@ export class DashboardProvider {
             <span>📝 Notes</span>
             <span class="notes-count" id="notes-count-${entry.id}">${noteCount > 0 ? noteCount + ' note' + (noteCount > 1 ? 's' : '') : ''}</span>
           </div>
-          ${noteCount > 0 ? `<button class="notes-archive-btn" onclick="archiveNotes('${entry.id}')" title="Archive notes to file and clear">📦 Archive</button>` : ''}
+          ${noteCount > 0 ? `<button class="notes-archive-btn" id="notes-archive-${entry.id}" onclick="archiveNotes('${entry.id}')" title="Archive notes to file and clear">📦 Archive</button>` : `<span id="notes-archive-${entry.id}"></span>`}
         </div>
         <div class="notes-body" id="notes-body-${entry.id}">
           <div class="note-input-row">
