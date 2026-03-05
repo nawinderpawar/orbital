@@ -322,19 +322,17 @@ export class DashboardProvider {
       font-weight: normal;
     }
     .notes-archive-btn {
-      background: none;
-      border: none;
-      color: var(--vscode-foreground);
-      opacity: 0.5;
+      background: var(--vscode-button-secondaryBackground);
+      border: 1px solid var(--vscode-button-border, transparent);
+      color: var(--vscode-button-secondaryForeground);
       cursor: pointer;
       font-size: 0.8em;
-      padding: 2px 6px;
+      padding: 3px 10px;
       border-radius: 3px;
+      font-weight: bold;
     }
     .notes-archive-btn:hover {
-      opacity: 1;
-      background: var(--vscode-badge-background);
-      color: var(--vscode-badge-foreground);
+      background: var(--vscode-button-secondaryHoverBackground);
     }
     .notes-body {
       max-height: 300px;
@@ -490,19 +488,17 @@ export class DashboardProvider {
     .diff-file-stats .add { color: #89d185; }
     .diff-file-stats .del { color: #f48771; }
     .diff-full-btn {
-      background: none;
-      border: none;
-      color: var(--vscode-foreground);
-      opacity: 0.5;
+      background: var(--vscode-button-secondaryBackground);
+      border: 1px solid var(--vscode-button-border, transparent);
+      color: var(--vscode-button-secondaryForeground);
       cursor: pointer;
       font-size: 0.8em;
-      padding: 2px 6px;
+      padding: 3px 10px;
       border-radius: 3px;
+      font-weight: bold;
     }
     .diff-full-btn:hover {
-      opacity: 1;
-      background: var(--vscode-badge-background);
-      color: var(--vscode-badge-foreground);
+      background: var(--vscode-button-secondaryHoverBackground);
     }
 
     .actions {
@@ -557,7 +553,7 @@ export class DashboardProvider {
     }
     // Restore saved layout
     const savedState = vscode.getState();
-    setLayout(savedState && savedState.layout === 'grid' ? 'grid' : 'list');
+    setLayout(savedState && savedState.layout === 'list' ? 'list' : 'grid');
 
     function removeRepo(repoId) {
       vscode.postMessage({ command: 'removeRepo', repoId });
