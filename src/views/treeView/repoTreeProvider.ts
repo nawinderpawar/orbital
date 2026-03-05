@@ -2,13 +2,14 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { DataStore } from '../../data/dataStore';
 import { GitService } from '../../git/gitService';
-import { RepoEntry, RepoStatus } from '../../types';
+import { RepoEntry, RepoStatus, DiffStats } from '../../types';
 
 export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private statusCache = new Map<string, RepoStatus>();
+  private diffCache = new Map<string, DiffStats>();
 
   constructor(
     private dataStore: DataStore,
@@ -17,6 +18,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   refresh(): void {
     this.statusCache.clear();
+    this.diffCache.clear();
     this._onDidChangeTreeData.fire();
   }
 
@@ -50,7 +52,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     return [];
   }
 
-  private getRepoChildren(repo: RepoEntry, status: RepoStatus): TreeNode[] {
+  private async getRepoChildren(repo: RepoEntry, status: RepoStatus): Promise<TreeNode[]> {
     const children: TreeNode[] = [];
 
     // Branch + sync
@@ -126,13 +128,33 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       ));
     }
 
+    // Diff vs main/master
+    try {
+      let diffStats = this.diffCache.get(repo.id);
+      if (!diffStats) {
+        const baseBranch = await this.gitService.getDefaultBranch(repo.path);
+        diffStats = await this.gitService.getDiffStats(repo.path, baseBranch, true);
+        this.diffCache.set(repo.id, diffStats);
+      }
+      if (diffStats.files.length > 0) {
+        const node = new DiffNode(
+          `${diffStats.files.length} file(s) changed vs ${diffStats.baseBranch}  +${diffStats.totalAdditions} -${diffStats.totalDeletions}`,
+          repo.id,
+          diffStats.files.map((f) => `${f.status[0].toUpperCase()} ${f.filePath} (+${f.additions} -${f.deletions})`).join('\n')
+        );
+        children.push(node);
+      }
+    } catch {
+      // diff failed (e.g. no main branch), skip
+    }
+
     return children;
   }
 }
 
 // ── Tree Node Types ───────────────────────────────────
 
-type TreeNode = RepoNode | InfoNode | MessageNode;
+type TreeNode = RepoNode | InfoNode | MessageNode | DiffNode;
 
 class RepoNode extends vscode.TreeItem {
   readonly repoId: string;
@@ -184,5 +206,18 @@ class MessageNode extends vscode.TreeItem {
   constructor(message: string) {
     super(message, vscode.TreeItemCollapsibleState.None);
     this.iconPath = new vscode.ThemeIcon('info');
+  }
+}
+
+class DiffNode extends vscode.TreeItem {
+  constructor(label: string, repoId: string, tooltipText: string) {
+    super(label, vscode.TreeItemCollapsibleState.None);
+    this.iconPath = new vscode.ThemeIcon('diff', new vscode.ThemeColor('charts.orange'));
+    this.tooltip = tooltipText;
+    this.command = {
+      command: 'orbital.viewDiff',
+      title: 'View Diff',
+      arguments: [{ repoId }],
+    };
   }
 }

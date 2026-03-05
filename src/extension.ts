@@ -3,6 +3,7 @@ import { DataStore } from './data/dataStore';
 import { GitService } from './git/gitService';
 import { RepoTreeProvider } from './views/treeView/repoTreeProvider';
 import { DashboardProvider } from './views/webview/dashboardProvider';
+import { DiffPaneProvider } from './views/webview/diffPaneProvider';
 import { PollService } from './services/pollService';
 import { registerCommands } from './commands/commands';
 
@@ -13,6 +14,7 @@ export function activate(context: vscode.ExtensionContext) {
   const gitService = new GitService();
   const treeProvider = new RepoTreeProvider(dataStore, gitService);
   const dashboardProvider = new DashboardProvider(context.extensionUri, dataStore, gitService);
+  const diffPaneProvider = new DiffPaneProvider(context.extensionUri, gitService);
 
   // Register the TreeView
   const treeView = vscode.window.createTreeView('orbital.repoTree', {
@@ -21,7 +23,7 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // Register all commands
-  registerCommands(context, dataStore, gitService, treeProvider, dashboardProvider);
+  registerCommands(context, dataStore, gitService, treeProvider, dashboardProvider, diffPaneProvider);
 
   // Start polling
   const config = vscode.workspace.getConfiguration('orbital');

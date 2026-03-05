@@ -2,7 +2,11 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { DataStore } from '../../data/dataStore';
 import { GitService } from '../../git/gitService';
-import { RepoView } from '../../types';
+import { RepoView, DiffStats } from '../../types';
+
+interface RepoViewWithDiff extends RepoView {
+  diffStats?: DiffStats | null;
+}
 
 export class DashboardProvider {
   private panel?: vscode.WebviewPanel;
@@ -93,6 +97,13 @@ export class DashboardProvider {
         case 'refresh':
           this.refresh();
           break;
+        case 'viewDiff': {
+          const diffRepo = this.dataStore.getRepo(msg.repoId);
+          if (diffRepo) {
+            vscode.commands.executeCommand('orbital.viewDiff', { repoId: msg.repoId });
+          }
+          break;
+        }
       }
     });
 
@@ -111,17 +122,24 @@ export class DashboardProvider {
     if (!this.panel) {return;}
 
     const repos = this.dataStore.getRepos();
-    const views: RepoView[] = [];
+    const views: RepoViewWithDiff[] = [];
 
     for (const entry of repos) {
       const status = await this.gitService.getStatus(entry.path);
-      views.push({ entry, status });
+      let diffStats: DiffStats | null = null;
+      try {
+        const baseBranch = await this.gitService.getDefaultBranch(entry.path);
+        diffStats = await this.gitService.getDiffStats(entry.path, baseBranch, true);
+      } catch {
+        // diff not available
+      }
+      views.push({ entry, status, diffStats });
     }
 
     this.panel.webview.html = this.buildHtml(views);
   }
 
-  private buildHtml(repos: RepoView[]): string {
+  private buildHtml(repos: RepoViewWithDiff[]): string {
     const cardsHtml = repos.length === 0
       ? `<div class="empty">
            <p>🛸 No repositories in orbit yet.</p>
@@ -401,6 +419,92 @@ export class DashboardProvider {
       font-size: 0.85em;
     }
 
+    /* ── Diff Section ──────────────────────────────── */
+    .diff-section {
+      margin-top: 8px;
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .diff-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      background: var(--vscode-sideBarSectionHeader-background, rgba(128,128,128,0.1));
+      cursor: pointer;
+      user-select: none;
+    }
+    .diff-header:hover { opacity: 0.85; }
+    .diff-header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      font-size: 0.85em;
+    }
+    .diff-toggle { font-size: 0.75em; opacity: 0.6; }
+    .diff-stats-inline {
+      font-size: 0.8em;
+      font-weight: normal;
+      opacity: 0.7;
+    }
+    .diff-stats-inline .add { color: #89d185; }
+    .diff-stats-inline .del { color: #f48771; }
+    .diff-body {
+      max-height: 200px;
+      overflow-y: auto;
+      transition: max-height 0.2s ease;
+    }
+    .diff-body.collapsed {
+      max-height: 0;
+      overflow: hidden;
+    }
+    .diff-file-row {
+      display: flex;
+      align-items: center;
+      padding: 3px 10px;
+      font-size: 0.85em;
+      border-bottom: 1px solid var(--note-border);
+      gap: 6px;
+    }
+    .diff-file-row:last-child { border-bottom: none; }
+    .diff-file-icon { width: 16px; text-align: center; font-size: 0.8em; }
+    .diff-file-icon.added { color: #89d185; }
+    .diff-file-icon.modified { color: #e2c08d; }
+    .diff-file-icon.deleted { color: #f48771; }
+    .diff-file-icon.renamed { color: #4ec9b0; }
+    .diff-file-name {
+      flex: 1;
+      font-family: var(--vscode-editor-font-family);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .diff-file-stats {
+      font-size: 0.8em;
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .diff-file-stats .add { color: #89d185; }
+    .diff-file-stats .del { color: #f48771; }
+    .diff-full-btn {
+      background: none;
+      border: none;
+      color: var(--vscode-foreground);
+      opacity: 0.5;
+      cursor: pointer;
+      font-size: 0.8em;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .diff-full-btn:hover {
+      opacity: 1;
+      background: var(--vscode-badge-background);
+      color: var(--vscode-badge-foreground);
+    }
+
     .actions {
       display: flex;
       gap: 6px;
@@ -467,11 +571,24 @@ export class DashboardProvider {
     function archiveNotes(repoId) {
       vscode.postMessage({ command: 'archiveNotes', repoId });
     }
+    function viewDiff(repoId) {
+      vscode.postMessage({ command: 'viewDiff', repoId });
+    }
 
     // Toggle notes collapse
     function toggleNotes(repoId) {
       const body = document.getElementById('notes-body-' + repoId);
       const toggle = document.getElementById('notes-toggle-' + repoId);
+      if (body && toggle) {
+        body.classList.toggle('collapsed');
+        toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
+      }
+    }
+
+    // Toggle diff collapse
+    function toggleDiff(repoId) {
+      const body = document.getElementById('diff-body-' + repoId);
+      const toggle = document.getElementById('diff-toggle-' + repoId);
       if (body && toggle) {
         body.classList.toggle('collapsed');
         toggle.textContent = body.classList.contains('collapsed') ? '▶' : '▼';
@@ -554,7 +671,7 @@ export class DashboardProvider {
 </html>`;
   }
 
-  private buildCard(rv: RepoView): string {
+  private buildCard(rv: RepoViewWithDiff): string {
     const { entry, status } = rv;
     const name = entry.alias || path.basename(entry.path);
     const s = status!;
@@ -618,6 +735,7 @@ export class DashboardProvider {
       <div class="badges">${badges.join('')}</div>
       ${wtHtml}
       ${commitHtml}
+      ${this.buildDiffSection(rv)}
       <div class="notes-section">
         <div class="notes-header">
           <div class="notes-header-left" onclick="toggleNotes('${entry.id}')">
@@ -639,6 +757,49 @@ export class DashboardProvider {
       <div class="actions">
         <button onclick="openFolder('${this.escAttr(entry.path)}')">📂 Open Folder</button>
         <button onclick="openTerminal('${entry.id}')">💻 Terminal</button>
+      </div>
+    </div>`;
+  }
+
+  private buildDiffSection(rv: RepoViewWithDiff): string {
+    const { entry, diffStats } = rv;
+    if (!diffStats || diffStats.files.length === 0) {
+      return '';
+    }
+
+    const fileRows = diffStats.files.slice(0, 20).map((f) => {
+      const icon = f.status === 'added' ? 'A' : f.status === 'deleted' ? 'D' : f.status === 'renamed' ? 'R' : 'M';
+      return `<div class="diff-file-row">
+        <span class="diff-file-icon ${f.status}">${icon}</span>
+        <span class="diff-file-name" title="${this.escHtml(f.filePath)}">${this.escHtml(f.filePath)}</span>
+        <span class="diff-file-stats">
+          ${f.additions > 0 ? `<span class="add">+${f.additions}</span>` : ''}
+          ${f.deletions > 0 ? `<span class="del">-${f.deletions}</span>` : ''}
+        </span>
+      </div>`;
+    }).join('');
+
+    const moreCount = diffStats.files.length - 20;
+    const moreHtml = moreCount > 0
+      ? `<div class="diff-file-row" style="opacity:0.5; justify-content:center;">...and ${moreCount} more file(s)</div>`
+      : '';
+
+    return `<div class="diff-section">
+      <div class="diff-header">
+        <div class="diff-header-left" onclick="toggleDiff('${entry.id}')">
+          <span class="diff-toggle" id="diff-toggle-${entry.id}">▶</span>
+          <span>⚡ Changes vs ${this.escHtml(diffStats.baseBranch)}</span>
+          <span class="diff-stats-inline">
+            ${diffStats.files.length} file(s)
+            <span class="add">+${diffStats.totalAdditions}</span>
+            <span class="del">-${diffStats.totalDeletions}</span>
+          </span>
+        </div>
+        <button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>
+      </div>
+      <div class="diff-body collapsed" id="diff-body-${entry.id}">
+        ${fileRows}
+        ${moreHtml}
       </div>
     </div>`;
   }

@@ -4,13 +4,15 @@ import { DataStore } from '../data/dataStore';
 import { GitService } from '../git/gitService';
 import { RepoTreeProvider } from '../views/treeView/repoTreeProvider';
 import { DashboardProvider } from '../views/webview/dashboardProvider';
+import { DiffPaneProvider } from '../views/webview/diffPaneProvider';
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   dataStore: DataStore,
   gitService: GitService,
   treeProvider: RepoTreeProvider,
-  dashboardProvider: DashboardProvider
+  dashboardProvider: DashboardProvider,
+  diffPaneProvider: DiffPaneProvider
 ): void {
   context.subscriptions.push(
     // ── Add Repository ────────────────────────────────
@@ -177,6 +179,16 @@ export function registerCommands(
       }
       treeProvider.refresh();
       dashboardProvider.refresh();
+    }),
+
+    // ── View Diff vs Main ────────────────────────────
+    vscode.commands.registerCommand('orbital.viewDiff', async (item?: { repoId?: string }) => {
+      const repoId = await resolveRepoId(item?.repoId, dataStore);
+      if (!repoId) {return;}
+      const repo = dataStore.getRepo(repoId);
+      if (!repo) {return;}
+      const repoName = repo.alias || path.basename(repo.path);
+      await diffPaneProvider.open(repo.path, repoName);
     })
   );
 }

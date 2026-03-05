@@ -54,3 +54,20 @@ export interface RepoView {
   entry: RepoEntry;
   status: RepoStatus | null;
 }
+
+/** Per-file diff stats against a base branch */
+export interface DiffFileInfo {
+  filePath: string;
+  additions: number;
+  deletions: number;
+  status: 'added' | 'modified' | 'deleted' | 'renamed';
+}
+
+/** Aggregate diff stats for a repo against a base branch */
+export interface DiffStats {
+  baseBranch: string;
+  includesUncommitted: boolean;
+  files: DiffFileInfo[];
+  totalAdditions: number;
+  totalDeletions: number;
+}

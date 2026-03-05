@@ -1,9 +1,9 @@
 import { execFile } from 'child_process';
-import { RepoStatus, WorktreeInfo, CommitSummary } from '../types';
+import { RepoStatus, WorktreeInfo, CommitSummary, DiffStats, DiffFileInfo } from '../types';
 
-function git(repoPath: string, args: string[]): Promise<string> {
+function git(repoPath: string, args: string[], timeoutMs = 10000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('git', ['-C', repoPath, ...args], { timeout: 10000, shell: true }, (err, stdout, stderr) => {
+    execFile('git', ['-C', repoPath, ...args], { timeout: timeoutMs, shell: true, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr.trim() || err.message));
       } else {
@@ -117,5 +117,99 @@ export class GitService {
 
   private async getRemoteUrl(repoPath: string): Promise<string> {
     return git(repoPath, ['remote', 'get-url', 'origin']);
+  }
+
+  // ── Diff Operations ─────────────────────────────────
+
+  /** Resolve the default branch (main or master) */
+  async getDefaultBranch(repoPath: string): Promise<string> {
+    // Try common default branch names
+    for (const candidate of ['main', 'master']) {
+      try {
+        await git(repoPath, ['rev-parse', '--verify', candidate]);
+        return candidate;
+      } catch {
+        // not found, try next
+      }
+    }
+    // Fallback: use the first remote HEAD
+    try {
+      const output = await git(repoPath, ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
+      return output.replace('origin/', '');
+    } catch {
+      return 'main';
+    }
+  }
+
+  /**
+   * Get diff stats between current branch and base.
+   * @param includeUncommitted If true, diffs working tree vs base. If false, diffs HEAD vs base.
+   */
+  async getDiffStats(repoPath: string, baseBranch: string, includeUncommitted: boolean): Promise<DiffStats> {
+    // committed only: diff main...HEAD --numstat
+    // all incl uncommitted: diff main --numstat
+    const diffRef = includeUncommitted ? baseBranch : `${baseBranch}...HEAD`;
+    const output = await git(repoPath, ['diff', diffRef, '--numstat'], 30000);
+
+    const files: DiffFileInfo[] = [];
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+
+    if (output) {
+      for (const line of output.split('\n')) {
+        if (!line.trim()) {continue;}
+        const parts = line.split('\t');
+        if (parts.length < 3) {continue;}
+
+        const additions = parts[0] === '-' ? 0 : parseInt(parts[0], 10) || 0;
+        const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
+        let filePath = parts[2];
+
+        // Handle renames: "old => new" or "{old => new}/path"
+        let status: DiffFileInfo['status'] = 'modified';
+        if (filePath.includes(' => ')) {
+          status = 'renamed';
+          // Extract the new name
+          filePath = filePath.replace(/\{[^}]+ => ([^}]+)\}/g, '$1').replace(/.+ => (.+)/, '$1');
+        }
+
+        files.push({ filePath, additions, deletions, status });
+        totalAdditions += additions;
+        totalDeletions += deletions;
+      }
+    }
+
+    // Determine added/deleted status by checking if file exists on base
+    if (files.length > 0) {
+      try {
+        const nameStatusOutput = await git(repoPath, ['diff', diffRef, '--name-status']);
+        const statusMap = new Map<string, string>();
+        for (const line of nameStatusOutput.split('\n')) {
+          if (!line.trim()) {continue;}
+          const tab = line.indexOf('\t');
+          if (tab > 0) {
+            const s = line.substring(0, tab).trim();
+            const f = line.substring(tab + 1).trim();
+            statusMap.set(f, s);
+          }
+        }
+        for (const file of files) {
+          const s = statusMap.get(file.filePath);
+          if (s === 'A') {file.status = 'added';}
+          else if (s === 'D') {file.status = 'deleted';}
+          else if (s?.startsWith('R')) {file.status = 'renamed';}
+          else if (s === 'M') {file.status = 'modified';}
+        }
+      } catch {
+        // name-status failed, keep defaults
+      }
+    }
+
+    return { baseBranch, includesUncommitted: includeUncommitted, files, totalAdditions, totalDeletions };
+  }
+
+  /** Get file content at a specific ref (for native diff) */
+  async getFileAtRef(repoPath: string, ref: string, filePath: string): Promise<string> {
+    return git(repoPath, ['show', `${ref}:${filePath}`], 30000);
   }
 }
