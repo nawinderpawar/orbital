@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 import { DataStore } from '../../data/dataStore';
 import { GitService } from '../../git/gitService';
-import { RepoEntry, RepoStatus, DiffStats } from '../../types';
+import { RepoEntry, RepoStatus, DiffStats, DiffFileInfo } from '../../types';
 
 export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<TreeNode | undefined | void>();
@@ -47,6 +49,10 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
     if (element instanceof RepoNode) {
       return this.getRepoChildren(element.repo, element.status);
+    }
+
+    if (element instanceof DiffNode) {
+      return element.diffStats.files.map((f) => new DiffFileNode(f, element.repoPath, element.diffStats.baseBranch, this.gitService));
     }
 
     return [];
@@ -139,8 +145,8 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       if (diffStats.files.length > 0) {
         const node = new DiffNode(
           `${diffStats.files.length} file(s) changed vs ${diffStats.baseBranch}  +${diffStats.totalAdditions} -${diffStats.totalDeletions}`,
-          repo.id,
-          diffStats.files.map((f) => `${f.status[0].toUpperCase()} ${f.filePath} (+${f.additions} -${f.deletions})`).join('\n')
+          repo.path,
+          diffStats
         );
         children.push(node);
       }
@@ -154,7 +160,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
 // ── Tree Node Types ───────────────────────────────────
 
-type TreeNode = RepoNode | InfoNode | MessageNode | DiffNode;
+type TreeNode = RepoNode | InfoNode | MessageNode | DiffNode | DiffFileNode;
 
 class RepoNode extends vscode.TreeItem {
   readonly repoId: string;
@@ -210,14 +216,48 @@ class MessageNode extends vscode.TreeItem {
 }
 
 class DiffNode extends vscode.TreeItem {
-  constructor(label: string, repoId: string, tooltipText: string) {
-    super(label, vscode.TreeItemCollapsibleState.None);
+  constructor(
+    label: string,
+    public readonly repoPath: string,
+    public readonly diffStats: DiffStats
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.iconPath = new vscode.ThemeIcon('diff', new vscode.ThemeColor('charts.orange'));
-    this.tooltip = tooltipText;
+    this.tooltip = diffStats.files
+      .map((f) => `${f.status[0].toUpperCase()} ${f.filePath} (+${f.additions} -${f.deletions})`)
+      .join('\n');
+  }
+}
+
+class DiffFileNode extends vscode.TreeItem {
+  constructor(
+    file: DiffFileInfo,
+    repoPath: string,
+    baseBranch: string,
+    gitService: GitService
+  ) {
+    const fileName = path.basename(file.filePath);
+    const dir = path.dirname(file.filePath);
+    super(fileName, vscode.TreeItemCollapsibleState.None);
+
+    this.description = dir !== '.' ? dir : '';
+    this.tooltip = `${file.filePath}\n+${file.additions} -${file.deletions}`;
+
+    // Status-based icon
+    const iconMap: Record<string, [string, string]> = {
+      added: ['diff-added', 'charts.green'],
+      modified: ['diff-modified', 'charts.yellow'],
+      deleted: ['diff-removed', 'charts.red'],
+      renamed: ['diff-renamed', 'charts.blue'],
+    };
+    const [icon, color] = iconMap[file.status] || ['diff-modified', 'charts.yellow'];
+    this.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
+
+    // Click opens native VS Code diff
     this.command = {
-      command: 'orbital.viewDiff',
-      title: 'View Diff',
-      arguments: [{ repoId }],
+      command: 'orbital.openFileDiff',
+      title: 'Open Diff',
+      arguments: [repoPath, file.filePath, baseBranch, gitService],
     };
   }
 }

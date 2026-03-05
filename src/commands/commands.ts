@@ -189,6 +189,38 @@ export function registerCommands(
       if (!repo) {return;}
       const repoName = repo.alias || path.basename(repo.path);
       await diffPaneProvider.open(repo.path, repoName);
+    }),
+
+    // ── Open File Diff (native VS Code diff editor) ──
+    vscode.commands.registerCommand('orbital.openFileDiff', async (
+      repoPath: string,
+      filePath: string,
+      baseBranch: string,
+      gitServiceRef: GitService
+    ) => {
+      const absolutePath = path.join(repoPath, filePath);
+      const fileName = path.basename(filePath);
+      const tmpDir = path.join(require('os').tmpdir(), 'orbital-diff');
+      const fs = require('fs');
+      if (!fs.existsSync(tmpDir)) { fs.mkdirSync(tmpDir, { recursive: true }); }
+
+      // Left: file at base branch
+      let leftUri: vscode.Uri;
+      try {
+        const baseContent = await gitServiceRef.getFileAtRef(repoPath, baseBranch, filePath);
+        const tmpFile = path.join(tmpDir, `${baseBranch}_${fileName}`);
+        fs.writeFileSync(tmpFile, baseContent, 'utf-8');
+        leftUri = vscode.Uri.file(tmpFile);
+      } catch {
+        const tmpFile = path.join(tmpDir, `${baseBranch}_${fileName}`);
+        fs.writeFileSync(tmpFile, '', 'utf-8');
+        leftUri = vscode.Uri.file(tmpFile);
+      }
+
+      // Right: working tree
+      const rightUri = vscode.Uri.file(absolutePath);
+      const label = `${fileName} (${baseBranch} ↔ working tree)`;
+      await vscode.commands.executeCommand('vscode.diff', leftUri, rightUri, label);
     })
   );
 }
