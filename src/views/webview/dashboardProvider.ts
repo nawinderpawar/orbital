@@ -94,6 +94,16 @@ export class DashboardProvider {
           }
           break;
         }
+        case 'openPathTerminal': {
+          const termPath = msg.path;
+          const termName = path.basename(termPath);
+          const terminal = vscode.window.createTerminal({
+            name: `Orbital: ${termName}`,
+            cwd: termPath,
+          });
+          terminal.show();
+          break;
+        }
         case 'refresh':
           this.refresh();
           break;
@@ -278,7 +288,34 @@ export class DashboardProvider {
     }
     .worktree-item {
       font-size: 0.85em;
-      padding: 2px 0;
+      padding: 4px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .worktree-info {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .worktree-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .worktree-actions button {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+      border: none;
+      padding: 2px 6px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.8em;
+    }
+    .worktree-actions button:hover {
+      background: var(--vscode-button-secondaryHoverBackground);
     }
     .commit-info {
       font-size: 0.82em;
@@ -564,6 +601,9 @@ export class DashboardProvider {
     function openTerminal(repoId) {
       vscode.postMessage({ command: 'openTerminal', repoId });
     }
+    function openPathTerminal(wtPath) {
+      vscode.postMessage({ command: 'openPathTerminal', path: wtPath });
+    }
     function archiveNotes(repoId) {
       vscode.postMessage({ command: 'archiveNotes', repoId });
     }
@@ -696,7 +736,13 @@ export class DashboardProvider {
     const wtHtml = extraWt.length > 0
       ? `<div class="section">
            <div class="section-title">Worktrees</div>
-           ${extraWt.map((w) => `<div class="worktree-item">🌳 ${this.escHtml(w.branch || 'detached')} → ${this.escHtml(w.path)}</div>`).join('')}
+           ${extraWt.map((w) => `<div class="worktree-item">
+             <span class="worktree-info">🌳 ${this.escHtml(w.branch || 'detached')} → ${this.escHtml(path.basename(w.path))}</span>
+             <span class="worktree-actions">
+               <button onclick="openFolder('${this.escAttr(w.path)}')" title="${this.escHtml(w.path)}">📂 Open</button>
+               <button onclick="openPathTerminal('${this.escAttr(w.path)}')" title="Terminal at ${this.escHtml(w.path)}">💻 Terminal</button>
+             </span>
+           </div>`).join('')}
          </div>`
       : '';
 
