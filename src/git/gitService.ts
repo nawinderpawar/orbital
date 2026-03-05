@@ -212,4 +212,18 @@ export class GitService {
   async getFileAtRef(repoPath: string, ref: string, filePath: string): Promise<string> {
     return git(repoPath, ['show', `${ref}:${filePath}`], 30000);
   }
+
+  /** Get set of file paths that have uncommitted changes (staged or unstaged) */
+  async getUncommittedFiles(repoPath: string): Promise<Set<string>> {
+    const output = await git(repoPath, ['status', '--porcelain']);
+    const files = new Set<string>();
+    if (!output) { return files; }
+    for (const line of output.split('\n')) {
+      if (!line.trim()) { continue; }
+      // porcelain format: XY filename  (or XY old -> new for renames)
+      const filePath = line.substring(3).split(' -> ').pop()!.trim();
+      files.add(filePath);
+    }
+    return files;
+  }
 }

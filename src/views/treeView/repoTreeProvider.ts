@@ -52,7 +52,13 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (element instanceof DiffNode) {
-      return element.diffStats.files.map((f) => new DiffFileNode(f, element.repoPath, element.diffStats.baseBranch, this.gitService));
+      let uncommitted: Set<string>;
+      try {
+        uncommitted = await this.gitService.getUncommittedFiles(element.repoPath);
+      } catch {
+        uncommitted = new Set();
+      }
+      return element.diffStats.files.map((f) => new DiffFileNode(f, element.repoPath, element.diffStats.baseBranch, this.gitService, uncommitted));
     }
 
     if (element instanceof WorktreeNode) {
@@ -264,14 +270,18 @@ class DiffFileNode extends vscode.TreeItem {
     file: DiffFileInfo,
     repoPath: string,
     baseBranch: string,
-    gitService: GitService
+    gitService: GitService,
+    uncommittedFiles: Set<string>
   ) {
     const fileName = path.basename(file.filePath);
     const dir = path.dirname(file.filePath);
     super(fileName, vscode.TreeItemCollapsibleState.None);
 
-    this.description = dir !== '.' ? dir : '';
-    this.tooltip = `${file.filePath}\n+${file.additions} -${file.deletions}`;
+    const isUncommitted = uncommittedFiles.has(file.filePath);
+    const commitIndicator = isUncommitted ? 'U' : 'C';
+    const dirPart = dir !== '.' ? dir + ' ' : '';
+    this.description = `${dirPart}[${commitIndicator}]`;
+    this.tooltip = `${file.filePath}\n+${file.additions} -${file.deletions}\n${isUncommitted ? 'Uncommitted' : 'Committed'}`;
 
     // Status-based icon
     const iconMap: Record<string, [string, string]> = {
