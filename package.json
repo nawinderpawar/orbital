@@ -5,6 +5,14 @@
   "version": "0.1.0",
   "publisher": "orbital-dev",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nawinderpawar/orbital.git"
+  },
+  "homepage": "https://github.com/nawinderpawar/orbital#readme",
+  "bugs": {
+    "url": "https://github.com/nawinderpawar/orbital/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
