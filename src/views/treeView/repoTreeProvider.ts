@@ -139,11 +139,11 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       ));
     }
 
-    // Diff vs main/master
+    // Diff vs base branch
     try {
       let diffStats = this.diffCache.get(repo.id);
       if (!diffStats) {
-        const baseBranch = await this.gitService.getDefaultBranch(repo.path);
+        const baseBranch = repo.baseBranch || await this.gitService.getDefaultBranch(repo.path);
         diffStats = await this.gitService.getDiffStats(repo.path, baseBranch, true);
         this.diffCache.set(repo.id, diffStats);
       }
@@ -151,12 +151,13 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
         const node = new DiffNode(
           `${diffStats.files.length} file(s) changed vs ${diffStats.baseBranch}  +${diffStats.totalAdditions} -${diffStats.totalDeletions}`,
           repo.path,
-          diffStats
+          diffStats,
+          repo.id
         );
         children.push(node);
       }
     } catch {
-      // diff failed (e.g. no main branch), skip
+      // diff failed (e.g. no base branch), skip
     }
 
     return children;
@@ -258,10 +259,12 @@ class DiffNode extends vscode.TreeItem {
   constructor(
     label: string,
     public readonly repoPath: string,
-    public readonly diffStats: DiffStats
+    public readonly diffStats: DiffStats,
+    public readonly repoId?: string
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
     this.id = `diff-${repoPath}`;
+    this.contextValue = repoId ? 'diffNode' : undefined;
     this.iconPath = new vscode.ThemeIcon('diff', new vscode.ThemeColor('charts.orange'));
     this.tooltip = diffStats.files
       .map((f) => `${f.status[0].toUpperCase()} ${f.filePath} (+${f.additions} -${f.deletions})`)

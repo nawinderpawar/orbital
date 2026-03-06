@@ -191,6 +191,45 @@ export function registerCommands(
       await diffPaneProvider.open(repo.path, repoName);
     }),
 
+    // ── Change Base Branch ───────────────────────────
+    vscode.commands.registerCommand('orbital.changeBaseBranch', async (item?: { repoId?: string }) => {
+      const repoId = await resolveRepoId(item?.repoId, dataStore);
+      if (!repoId) {return;}
+      const repo = dataStore.getRepo(repoId);
+      if (!repo) {return;}
+
+      let branches: string[];
+      try {
+        branches = await gitService.listBranches(repo.path);
+      } catch {
+        vscode.window.showErrorMessage('Failed to list branches.');
+        return;
+      }
+
+      const currentBase = repo.baseBranch || await gitService.getDefaultBranch(repo.path);
+      const items = branches.map((b) => ({
+        label: b === currentBase ? `$(check) ${b}` : b,
+        description: b === currentBase ? '(current)' : '',
+        branch: b,
+      }));
+
+      // Add "Auto-detect" option at the top
+      items.unshift({
+        label: !repo.baseBranch ? '$(check) Auto-detect (main/master)' : 'Auto-detect (main/master)',
+        description: !repo.baseBranch ? '(current)' : '',
+        branch: '',
+      });
+
+      const pick = await vscode.window.showQuickPick(items, {
+        placeHolder: `Base branch for diffs — currently: ${currentBase}`,
+      });
+      if (!pick) {return;}
+
+      dataStore.setBaseBranch(repoId, pick.branch || undefined);
+      treeProvider.refresh();
+      dashboardProvider.refresh();
+    }),
+
     // ── Open File Diff (native VS Code diff editor) ──
     vscode.commands.registerCommand('orbital.openFileDiff', async (
       repoPath: string,

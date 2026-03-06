@@ -4,6 +4,7 @@ export interface RepoEntry {
   path: string;
   alias?: string;
   notes: NoteEntry[];
+  baseBranch?: string;
   addedAt: string;
 }
 

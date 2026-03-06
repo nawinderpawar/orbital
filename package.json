@@ -104,6 +104,11 @@
         "command": "orbital.viewDiff",
         "title": "Orbital: View Diff vs Main",
         "icon": "$(diff)"
+      },
+      {
+        "command": "orbital.changeBaseBranch",
+        "title": "Orbital: Change Base Branch",
+        "icon": "$(git-branch)"
       }
     ],
     "menus": {
@@ -159,6 +164,14 @@
         {
           "command": "orbital.viewDiff",
           "when": "view == orbital.repoTree && viewItem == repo"
+        },
+        {
+          "command": "orbital.changeBaseBranch",
+          "when": "view == orbital.repoTree && viewItem == repo"
+        },
+        {
+          "command": "orbital.changeBaseBranch",
+          "when": "view == orbital.repoTree && viewItem == diffNode"
         }
       ]
     },

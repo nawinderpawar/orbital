@@ -139,6 +139,14 @@ export class DataStore {
     }
   }
 
+  setBaseBranch(id: string, branch: string | undefined): void {
+    const repo = this.data.repos.find((r) => r.id === id);
+    if (repo) {
+      repo.baseBranch = branch;
+      this.save();
+    }
+  }
+
   // ── Persistence ───────────────────────────────────────
 
   private load(): OrbitalData {

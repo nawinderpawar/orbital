@@ -226,4 +226,11 @@ export class GitService {
     }
     return files;
   }
+
+  /** List all local branches */
+  async listBranches(repoPath: string): Promise<string[]> {
+    const output = await git(repoPath, ['branch', '--format=%(refname:short)']);
+    if (!output) { return []; }
+    return output.split('\n').map((b) => b.trim()).filter((b) => b.length > 0);
+  }
 }

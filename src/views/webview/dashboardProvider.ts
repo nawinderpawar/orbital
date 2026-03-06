@@ -6,6 +6,7 @@ import { RepoView, DiffStats } from '../../types';
 
 interface RepoViewWithDiff extends RepoView {
   diffStats?: DiffStats | null;
+  branches?: string[];
 }
 
 export class DashboardProvider {
@@ -114,6 +115,11 @@ export class DashboardProvider {
           }
           break;
         }
+        case 'changeBaseBranch': {
+          this.dataStore.setBaseBranch(msg.repoId, msg.branch || undefined);
+          this.refresh();
+          break;
+        }
       }
     });
 
@@ -137,13 +143,15 @@ export class DashboardProvider {
     for (const entry of repos) {
       const status = await this.gitService.getStatus(entry.path);
       let diffStats: DiffStats | null = null;
+      let branches: string[] = [];
       try {
-        const baseBranch = await this.gitService.getDefaultBranch(entry.path);
+        const baseBranch = entry.baseBranch || await this.gitService.getDefaultBranch(entry.path);
         diffStats = await this.gitService.getDiffStats(entry.path, baseBranch, true);
+        branches = await this.gitService.listBranches(entry.path);
       } catch {
         // diff not available
       }
-      views.push({ entry, status, diffStats });
+      views.push({ entry, status, diffStats, branches });
     }
 
     this.panel.webview.html = this.buildHtml(views);
@@ -537,6 +545,25 @@ export class DashboardProvider {
     .diff-full-btn:hover {
       background: var(--vscode-button-secondaryHoverBackground);
     }
+    .diff-branch-select {
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border);
+      border-radius: 3px;
+      padding: 2px 6px;
+      font-size: 0.8em;
+      font-family: var(--vscode-font-family);
+      cursor: pointer;
+      outline: none;
+    }
+    .diff-branch-select:focus {
+      border-color: var(--vscode-focusBorder);
+    }
+    .diff-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     .actions {
       display: flex;
@@ -609,6 +636,9 @@ export class DashboardProvider {
     }
     function viewDiff(repoId) {
       vscode.postMessage({ command: 'viewDiff', repoId });
+    }
+    function changeBaseBranch(repoId, selectEl) {
+      vscode.postMessage({ command: 'changeBaseBranch', repoId, branch: selectEl.value });
     }
 
     // Toggle notes collapse
@@ -809,6 +839,13 @@ export class DashboardProvider {
       return '';
     }
 
+    // Branch selector options
+    const branches = rv.branches || [];
+    const currentBase = diffStats.baseBranch;
+    const branchOptions = branches.map((b) =>
+      `<option value="${this.escHtml(b)}" ${b === currentBase ? 'selected' : ''}>${this.escHtml(b)}</option>`
+    ).join('');
+
     const fileRows = diffStats.files.slice(0, 20).map((f) => {
       const icon = f.status === 'added' ? 'A' : f.status === 'deleted' ? 'D' : f.status === 'renamed' ? 'R' : 'M';
       return `<div class="diff-file-row">
@@ -830,14 +867,19 @@ export class DashboardProvider {
       <div class="diff-header">
         <div class="diff-header-left" onclick="toggleDiff('${entry.id}')">
           <span class="diff-toggle" id="diff-toggle-${entry.id}">▶</span>
-          <span>⚡ Changes vs ${this.escHtml(diffStats.baseBranch)}</span>
+          <span>⚡ Changes vs</span>
           <span class="diff-stats-inline">
             ${diffStats.files.length} file(s)
             <span class="add">+${diffStats.totalAdditions}</span>
             <span class="del">-${diffStats.totalDeletions}</span>
           </span>
         </div>
-        <button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>
+        <div class="diff-header-actions">
+          <select class="diff-branch-select" onchange="changeBaseBranch('${entry.id}', this)" title="Base branch for diff">
+            ${branchOptions}
+          </select>
+          <button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>
+        </div>
       </div>
       <div class="diff-body collapsed" id="diff-body-${entry.id}">
         ${fileRows}
