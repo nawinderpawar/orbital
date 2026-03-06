@@ -197,6 +197,7 @@ class RepoNode extends vscode.TreeItem {
     const label = repo.alias || path.basename(repo.path);
     super(label, vscode.TreeItemCollapsibleState.Expanded);
 
+    this.id = `repo-${repo.id}`;
     this.repoId = repo.id;
     this.contextValue = 'repo';
     this.tooltip = repo.path;
@@ -222,8 +223,9 @@ class RepoNode extends vscode.TreeItem {
 }
 
 class InfoNode extends vscode.TreeItem {
-  constructor(label: string, icon: string, color?: string, tooltipText?: string) {
+  constructor(label: string, icon: string, color?: string, tooltipText?: string, nodeId?: string) {
     super(label, vscode.TreeItemCollapsibleState.None);
+    if (nodeId) { this.id = nodeId; }
     this.iconPath = color
       ? new vscode.ThemeIcon(icon, new vscode.ThemeColor(color))
       : new vscode.ThemeIcon(icon);
@@ -246,6 +248,7 @@ class WorktreeNode extends vscode.TreeItem {
     public readonly worktreePath: string
   ) {
     super(`🌳 ${branch} → ${path.basename(worktreePath)}`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = `wt-${worktreePath}`;
     this.iconPath = new vscode.ThemeIcon('list-tree', new vscode.ThemeColor('charts.purple'));
     this.tooltip = `Worktree: ${worktreePath}`;
   }
@@ -258,6 +261,7 @@ class DiffNode extends vscode.TreeItem {
     public readonly diffStats: DiffStats
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = `diff-${repoPath}`;
     this.iconPath = new vscode.ThemeIcon('diff', new vscode.ThemeColor('charts.orange'));
     this.tooltip = diffStats.files
       .map((f) => `${f.status[0].toUpperCase()} ${f.filePath} (+${f.additions} -${f.deletions})`)
@@ -276,6 +280,8 @@ class DiffFileNode extends vscode.TreeItem {
     const fileName = path.basename(file.filePath);
     const dir = path.dirname(file.filePath);
     super(fileName, vscode.TreeItemCollapsibleState.None);
+
+    this.id = `difffile-${repoPath}-${file.filePath}`;
 
     const isUncommitted = uncommittedFiles.has(file.filePath);
     const commitIndicator = isUncommitted ? 'U' : 'C';
