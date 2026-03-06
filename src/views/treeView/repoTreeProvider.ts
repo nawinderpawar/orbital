@@ -279,25 +279,21 @@ class DiffFileNode extends vscode.TreeItem {
   ) {
     const fileName = path.basename(file.filePath);
     const dir = path.dirname(file.filePath);
-    super(fileName, vscode.TreeItemCollapsibleState.None);
+    const statusLetter = file.status === 'added' ? 'A' : file.status === 'deleted' ? 'D' : file.status === 'renamed' ? 'R' : 'M';
+    super(`${statusLetter}  ${fileName}`, vscode.TreeItemCollapsibleState.None);
 
     this.id = `difffile-${repoPath}-${file.filePath}`;
 
     const isUncommitted = uncommittedFiles.has(file.filePath);
-    const commitIndicator = isUncommitted ? 'U' : 'C';
-    const dirPart = dir !== '.' ? dir + ' ' : '';
-    this.description = `${dirPart}[${commitIndicator}]`;
+    this.description = dir !== '.' ? dir : '';
     this.tooltip = `${file.filePath}\n+${file.additions} -${file.deletions}\n${isUncommitted ? 'Uncommitted' : 'Committed'}`;
 
-    // Status-based icon
-    const iconMap: Record<string, [string, string]> = {
-      added: ['diff-added', 'charts.green'],
-      modified: ['diff-modified', 'charts.yellow'],
-      deleted: ['diff-removed', 'charts.red'],
-      renamed: ['diff-renamed', 'charts.blue'],
-    };
-    const [icon, color] = iconMap[file.status] || ['diff-modified', 'charts.yellow'];
-    this.iconPath = new vscode.ThemeIcon(icon, new vscode.ThemeColor(color));
+    // Icon shows commit status: cloud for committed, pencil for uncommitted
+    if (isUncommitted) {
+      this.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.orange'));
+    } else {
+      this.iconPath = new vscode.ThemeIcon('cloud-upload', new vscode.ThemeColor('charts.green'));
+    }
 
     // Click opens native VS Code diff
     this.command = {
