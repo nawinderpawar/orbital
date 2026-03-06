@@ -263,7 +263,7 @@ class DiffNode extends vscode.TreeItem {
     public readonly repoId?: string
   ) {
     super(label, vscode.TreeItemCollapsibleState.Collapsed);
-    this.id = `diff-${repoPath}`;
+    this.id = `diff-${repoPath}-${diffStats.baseBranch}`;
     this.contextValue = repoId ? 'diffNode' : undefined;
     this.iconPath = new vscode.ThemeIcon('diff', new vscode.ThemeColor('charts.orange'));
     this.tooltip = diffStats.files
