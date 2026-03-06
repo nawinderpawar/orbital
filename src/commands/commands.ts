@@ -207,25 +207,25 @@ export function registerCommands(
       }
 
       const currentBase = repo.baseBranch || await gitService.getDefaultBranch(repo.path);
-      const items = branches.map((b) => ({
-        label: b === currentBase ? `$(check) ${b}` : b,
-        description: b === currentBase ? '(current)' : '',
-        branch: b,
-      }));
 
-      // Add "Auto-detect" option at the top
-      items.unshift({
-        label: !repo.baseBranch ? '$(check) Auto-detect (main/master)' : 'Auto-detect (main/master)',
-        description: !repo.baseBranch ? '(current)' : '',
-        branch: '',
-      });
+      // Build pick items: auto-detect first, then all branches
+      const pickLabels: string[] = [
+        !repo.baseBranch ? '✓ Auto-detect (main/master)' : 'Auto-detect (main/master)',
+        ...branches.map((b) => b === currentBase ? `✓ ${b}` : b),
+      ];
 
-      const pick = await vscode.window.showQuickPick(items, {
+      const pick = await vscode.window.showQuickPick(pickLabels, {
         placeHolder: `Base branch for diffs — currently: ${currentBase}`,
       });
       if (!pick) {return;}
 
-      dataStore.setBaseBranch(repoId, pick.branch || undefined);
+      // Parse selection
+      const selected = pick.replace(/^✓ /, '');
+      if (selected.startsWith('Auto-detect')) {
+        dataStore.setBaseBranch(repoId, undefined);
+      } else {
+        dataStore.setBaseBranch(repoId, selected);
+      }
       treeProvider.refresh();
       dashboardProvider.refresh();
     }),

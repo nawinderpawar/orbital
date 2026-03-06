@@ -835,18 +835,22 @@ export class DashboardProvider {
 
   private buildDiffSection(rv: RepoViewWithDiff): string {
     const { entry, diffStats } = rv;
-    if (!diffStats || diffStats.files.length === 0) {
+    const branches = rv.branches || [];
+
+    // Always show the section if we have branches (so user can switch back)
+    if (!diffStats && branches.length === 0) {
       return '';
     }
 
-    // Branch selector options
-    const branches = rv.branches || [];
-    const currentBase = diffStats.baseBranch;
+    const currentBase = diffStats?.baseBranch || entry.baseBranch || 'main';
     const branchOptions = branches.map((b) =>
       `<option value="${this.escHtml(b)}" ${b === currentBase ? 'selected' : ''}>${this.escHtml(b)}</option>`
     ).join('');
 
-    const fileRows = diffStats.files.slice(0, 20).map((f) => {
+    const hasFiles = diffStats && diffStats.files.length > 0;
+
+    const fileRows = hasFiles
+      ? diffStats!.files.slice(0, 20).map((f) => {
       const icon = f.status === 'added' ? 'A' : f.status === 'deleted' ? 'D' : f.status === 'renamed' ? 'R' : 'M';
       return `<div class="diff-file-row">
         <span class="diff-file-icon ${f.status}">${icon}</span>
@@ -856,34 +860,42 @@ export class DashboardProvider {
           ${f.deletions > 0 ? `<span class="del">-${f.deletions}</span>` : ''}
         </span>
       </div>`;
-    }).join('');
+    }).join('')
+      : '';
 
-    const moreCount = diffStats.files.length - 20;
+    const moreCount = hasFiles ? diffStats!.files.length - 20 : 0;
     const moreHtml = moreCount > 0
       ? `<div class="diff-file-row" style="opacity:0.5; justify-content:center;">...and ${moreCount} more file(s)</div>`
       : '';
+
+    const statsHtml = hasFiles
+      ? `<span class="diff-stats-inline">
+            ${diffStats!.files.length} file(s)
+            <span class="add">+${diffStats!.totalAdditions}</span>
+            <span class="del">-${diffStats!.totalDeletions}</span>
+          </span>`
+      : `<span class="diff-stats-inline" style="opacity:0.5">No changes</span>`;
+
+    const bodyContent = hasFiles
+      ? `${fileRows}${moreHtml}`
+      : `<div class="diff-file-row" style="opacity:0.5; justify-content:center;">No differences found</div>`;
 
     return `<div class="diff-section">
       <div class="diff-header">
         <div class="diff-header-left" onclick="toggleDiff('${entry.id}')">
           <span class="diff-toggle" id="diff-toggle-${entry.id}">▶</span>
           <span>⚡ Changes vs</span>
-          <span class="diff-stats-inline">
-            ${diffStats.files.length} file(s)
-            <span class="add">+${diffStats.totalAdditions}</span>
-            <span class="del">-${diffStats.totalDeletions}</span>
-          </span>
+          ${statsHtml}
         </div>
         <div class="diff-header-actions">
           <select class="diff-branch-select" onchange="changeBaseBranch('${entry.id}', this)" title="Base branch for diff">
             ${branchOptions}
           </select>
-          <button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>
+          ${hasFiles ? `<button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>` : ''}
         </div>
       </div>
       <div class="diff-body collapsed" id="diff-body-${entry.id}">
-        ${fileRows}
-        ${moreHtml}
+        ${bodyContent}
       </div>
     </div>`;
   }
