@@ -125,7 +125,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     );
     if (extraWorktrees.length > 0) {
       for (const wt of extraWorktrees) {
-        children.push(new WorktreeNode(wt.branch || 'detached', wt.path));
+        children.push(new WorktreeNode(wt.branch || 'detached', wt.path, repo.baseBranch));
       }
     }
 
@@ -166,7 +166,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private async getWorktreeChildren(wt: WorktreeNode): Promise<TreeNode[]> {
     const children: TreeNode[] = [];
     try {
-      const baseBranch = await this.gitService.getDefaultBranch(wt.worktreePath);
+      const baseBranch = wt.repoBaseBranch || await this.gitService.getDefaultBranch(wt.worktreePath);
       const diffStats = await this.gitService.getDiffStats(wt.worktreePath, baseBranch, true);
       if (diffStats.files.length > 0) {
         children.push(new DiffNode(
@@ -246,10 +246,11 @@ class MessageNode extends vscode.TreeItem {
 class WorktreeNode extends vscode.TreeItem {
   constructor(
     branch: string,
-    public readonly worktreePath: string
+    public readonly worktreePath: string,
+    public readonly repoBaseBranch?: string
   ) {
     super(`🌳 ${branch} → ${path.basename(worktreePath)}`, vscode.TreeItemCollapsibleState.Collapsed);
-    this.id = `wt-${worktreePath}`;
+    this.id = `wt-${worktreePath}-${repoBaseBranch || 'auto'}`;
     this.iconPath = new vscode.ThemeIcon('list-tree', new vscode.ThemeColor('charts.purple'));
     this.tooltip = `Worktree: ${worktreePath}`;
   }
