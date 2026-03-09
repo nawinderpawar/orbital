@@ -244,6 +244,8 @@ export function registerCommands(
     ) => {
       const absolutePath = path.join(repoPath, filePath);
       const fileName = path.basename(filePath);
+      const safeBranch = baseBranch.replace(/[/\\:*?"<>|]/g, '_');
+      const safeFilePath = filePath.replace(/[/\\]/g, '_');
       const tmpDir = path.join(require('os').tmpdir(), 'orbital-diff');
       const fs = require('fs');
       if (!fs.existsSync(tmpDir)) { fs.mkdirSync(tmpDir, { recursive: true }); }
@@ -252,11 +254,11 @@ export function registerCommands(
       let leftUri: vscode.Uri;
       try {
         const baseContent = await gitServiceRef.getFileAtRef(repoPath, baseBranch, filePath);
-        const tmpFile = path.join(tmpDir, `${baseBranch}_${fileName}`);
+        const tmpFile = path.join(tmpDir, `${safeBranch}__${safeFilePath}`);
         fs.writeFileSync(tmpFile, baseContent, 'utf-8');
         leftUri = vscode.Uri.file(tmpFile);
       } catch {
-        const tmpFile = path.join(tmpDir, `${baseBranch}_${fileName}`);
+        const tmpFile = path.join(tmpDir, `${safeBranch}__${safeFilePath}`);
         fs.writeFileSync(tmpFile, '', 'utf-8');
         leftUri = vscode.Uri.file(tmpFile);
       }
