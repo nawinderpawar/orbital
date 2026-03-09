@@ -247,6 +247,24 @@ export class GitService {
       }
     }
 
+    // Append untracked files when including uncommitted changes
+    if (includeUncommitted) {
+      try {
+        const untrackedOutput = await git(repoPath, ['ls-files', '--others', '--exclude-standard']);
+        if (untrackedOutput) {
+          const trackedPaths = new Set(files.map((f) => f.filePath));
+          for (const line of untrackedOutput.split('\n')) {
+            const filePath = line.trim();
+            if (filePath && !trackedPaths.has(filePath)) {
+              files.push({ filePath, additions: 0, deletions: 0, status: 'added' });
+            }
+          }
+        }
+      } catch {
+        // ls-files failed, skip untracked
+      }
+    }
+
     return { baseBranch, includesUncommitted: includeUncommitted, files, totalAdditions, totalDeletions };
   }
 
@@ -255,7 +273,7 @@ export class GitService {
     return git(repoPath, ['show', `${ref}:${filePath}`], 30000);
   }
 
-  /** Get set of file paths that have uncommitted changes (staged or unstaged) */
+  /** Get set of file paths that have uncommitted changes (staged, unstaged, or untracked) */
   async getUncommittedFiles(repoPath: string): Promise<Set<string>> {
     const output = await git(repoPath, ['status', '--porcelain']);
     const files = new Set<string>();
@@ -263,6 +281,7 @@ export class GitService {
     for (const line of output.split('\n')) {
       if (!line.trim()) { continue; }
       // porcelain format: XY filename  (or XY old -> new for renames)
+      // ?? for untracked files
       const filePath = line.substring(3).split(' -> ').pop()!.trim();
       files.add(filePath);
     }
