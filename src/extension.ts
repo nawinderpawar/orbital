@@ -21,6 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
   });
+  treeProvider.setTreeView(treeView);
 
   // Register all commands
   registerCommands(context, dataStore, gitService, treeProvider, dashboardProvider, diffPaneProvider);
@@ -29,7 +30,7 @@ export function activate(context: vscode.ExtensionContext) {
   const config = vscode.workspace.getConfiguration('orbital');
   const intervalSec = config.get<number>('pollIntervalSeconds', 30);
   pollService = new PollService(gitService, dataStore, intervalSec * 1000, () => {
-    treeProvider.refresh();
+    treeProvider.softRefresh();
     dashboardProvider.refresh();
   });
   pollService.start();

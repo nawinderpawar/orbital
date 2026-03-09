@@ -1,9 +1,33 @@
 import { execFile } from 'child_process';
 import { RepoStatus, WorktreeInfo, CommitSummary, DiffStats, DiffFileInfo } from '../types';
 
+// Resolve git path once at module load
+let resolvedGitPath: string | null = null;
+
+function findGitPath(): string {
+  if (resolvedGitPath) { return resolvedGitPath; }
+  // Try common locations on Windows
+  const candidates = [
+    'C:\\Program Files\\Git\\cmd\\git.exe',
+    'C:\\Program Files (x86)\\Git\\cmd\\git.exe',
+  ];
+  const fs = require('fs');
+  for (const p of candidates) {
+    if (fs.existsSync(p)) {
+      resolvedGitPath = p;
+      return p;
+    }
+  }
+  // Fallback: rely on PATH via shell
+  resolvedGitPath = 'git';
+  return 'git';
+}
+
 function git(repoPath: string, args: string[], timeoutMs = 10000): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('git', ['-C', repoPath, ...args], { timeout: timeoutMs, shell: true, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+    const gitPath = findGitPath();
+    const useShell = gitPath === 'git'; // only use shell when we couldn't resolve the path
+    execFile(gitPath, ['-C', repoPath, ...args], { timeout: timeoutMs, shell: useShell, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
         reject(new Error(stderr.trim() || err.message));
       } else {
@@ -14,6 +38,12 @@ function git(repoPath: string, args: string[], timeoutMs = 10000): Promise<strin
 }
 
 export class GitService {
+  // Caches with TTL
+  private defaultBranchCache = new Map<string, { value: string; expiresAt: number }>();
+  private branchListCache = new Map<string, { value: string[]; expiresAt: number }>();
+
+  private static DEFAULT_BRANCH_TTL = 5 * 60 * 1000;  // 5 minutes
+  private static BRANCH_LIST_TTL = 2 * 60 * 1000;     // 2 minutes
   async getStatus(repoPath: string): Promise<RepoStatus> {
     try {
       const [branch, dirty, aheadBehind, worktrees, lastCommit, remoteUrl] =
@@ -121,24 +151,36 @@ export class GitService {
 
   // ── Diff Operations ─────────────────────────────────
 
-  /** Resolve the default branch (main or master) */
+  /** Resolve the default branch (main or master) — cached */
   async getDefaultBranch(repoPath: string): Promise<string> {
+    const cached = this.defaultBranchCache.get(repoPath);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.value;
+    }
+
+    let result = 'main';
     // Try common default branch names
     for (const candidate of ['main', 'master']) {
       try {
         await git(repoPath, ['rev-parse', '--verify', candidate]);
-        return candidate;
+        result = candidate;
+        break;
       } catch {
         // not found, try next
       }
     }
-    // Fallback: use the first remote HEAD
-    try {
-      const output = await git(repoPath, ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
-      return output.replace('origin/', '');
-    } catch {
-      return 'main';
+    if (result === 'main') {
+      // Fallback: use the first remote HEAD
+      try {
+        const output = await git(repoPath, ['symbolic-ref', 'refs/remotes/origin/HEAD', '--short']);
+        result = output.replace('origin/', '');
+      } catch {
+        // keep 'main'
+      }
     }
+
+    this.defaultBranchCache.set(repoPath, { value: result, expiresAt: Date.now() + GitService.DEFAULT_BRANCH_TTL });
+    return result;
   }
 
   /**
@@ -227,10 +269,16 @@ export class GitService {
     return files;
   }
 
-  /** List all local branches */
+  /** List all local branches — cached */
   async listBranches(repoPath: string): Promise<string[]> {
+    const cached = this.branchListCache.get(repoPath);
+    if (cached && Date.now() < cached.expiresAt) {
+      return cached.value;
+    }
+
     const output = await git(repoPath, ['branch', '--format=%(refname:short)']);
-    if (!output) { return []; }
-    return output.split('\n').map((b) => b.trim()).filter((b) => b.length > 0);
+    const branches = output ? output.split('\n').map((b) => b.trim()).filter((b) => b.length > 0) : [];
+    this.branchListCache.set(repoPath, { value: branches, expiresAt: Date.now() + GitService.BRANCH_LIST_TTL });
+    return branches;
   }
 }

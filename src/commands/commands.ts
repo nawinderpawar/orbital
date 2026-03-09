@@ -85,8 +85,13 @@ export function registerCommands(
 
     // ── Refresh All ───────────────────────────────────
     vscode.commands.registerCommand('orbital.refresh', () => {
-      treeProvider.refresh();
-      dashboardProvider.refresh();
+      vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Orbital: Refreshing...', cancellable: false },
+        async () => {
+          treeProvider.refresh();
+          await dashboardProvider.refresh();
+        }
+      );
     }),
 
     // ── Open Dashboard ────────────────────────────────

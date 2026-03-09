@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import { DataStore } from '../../data/dataStore';
 import { GitService } from '../../git/gitService';
 import { RepoEntry, RepoStatus, DiffStats, DiffFileInfo } from '../../types';
@@ -13,14 +11,30 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   private statusCache = new Map<string, RepoStatus>();
   private diffCache = new Map<string, DiffStats>();
 
+  private treeView?: vscode.TreeView<TreeNode>;
+
   constructor(
     private dataStore: DataStore,
     private gitService: GitService
   ) {}
 
+  setTreeView(tv: vscode.TreeView<TreeNode>): void {
+    this.treeView = tv;
+  }
+
+  /** Full refresh — clears all caches including diffs */
   refresh(): void {
     this.statusCache.clear();
     this.diffCache.clear();
+    if (this.treeView) { this.treeView.message = '$(sync~spin) Refreshing...'; }
+    this._onDidChangeTreeData.fire();
+    // Clear message after a short delay (tree will have re-rendered)
+    setTimeout(() => { if (this.treeView) { this.treeView.message = undefined; } }, 500);
+  }
+
+  /** Soft refresh — clears only status cache, preserves diff cache (used by poll) */
+  softRefresh(): void {
+    this.statusCache.clear();
     this._onDidChangeTreeData.fire();
   }
 
@@ -30,21 +44,22 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
 
   async getChildren(element?: TreeNode): Promise<TreeNode[]> {
     if (!element) {
-      // Root: list repos
+      // Root: list repos — fetch all statuses in parallel
       const repos = this.dataStore.getRepos();
       if (repos.length === 0) {
         return [new MessageNode('No repositories tracked. Use + to add one.')];
       }
-      const nodes: TreeNode[] = [];
-      for (const repo of repos) {
-        let status = this.statusCache.get(repo.id);
-        if (!status) {
-          status = await this.gitService.getStatus(repo.path);
-          this.statusCache.set(repo.id, status);
-        }
-        nodes.push(new RepoNode(repo, status));
-      }
-      return nodes;
+      const statuses = await Promise.all(
+        repos.map(async (repo) => {
+          let status = this.statusCache.get(repo.id);
+          if (!status) {
+            status = await this.gitService.getStatus(repo.path);
+            this.statusCache.set(repo.id, status);
+          }
+          return { repo, status };
+        })
+      );
+      return statuses.map(({ repo, status }) => new RepoNode(repo, status));
     }
 
     if (element instanceof RepoNode) {
@@ -52,6 +67,7 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     if (element instanceof DiffNode) {
+      // uncommittedFiles is the only async fetch here — cache it
       let uncommitted: Set<string>;
       try {
         uncommitted = await this.gitService.getUncommittedFiles(element.repoPath);
@@ -69,6 +85,21 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   private async getRepoChildren(repo: RepoEntry, status: RepoStatus): Promise<TreeNode[]> {
+    // Diff vs base branch (fetch in parallel with the rest of the children building)
+    const diffPromise = (async (): Promise<DiffStats | null> => {
+      let diffStats = this.diffCache.get(repo.id);
+      if (diffStats) { return diffStats; }
+      try {
+        const baseBranch = repo.baseBranch || await this.gitService.getDefaultBranch(repo.path);
+        diffStats = await this.gitService.getDiffStats(repo.path, baseBranch, true);
+        this.diffCache.set(repo.id, diffStats);
+        return diffStats;
+      } catch {
+        return null;
+      }
+    })();
+
+    // Build non-diff children immediately
     const children: TreeNode[] = [];
 
     // Branch + sync
@@ -139,25 +170,16 @@ export class RepoTreeProvider implements vscode.TreeDataProvider<TreeNode> {
       ));
     }
 
-    // Diff vs base branch
-    try {
-      let diffStats = this.diffCache.get(repo.id);
-      if (!diffStats) {
-        const baseBranch = repo.baseBranch || await this.gitService.getDefaultBranch(repo.path);
-        diffStats = await this.gitService.getDiffStats(repo.path, baseBranch, true);
-        this.diffCache.set(repo.id, diffStats);
-      }
-      if (diffStats.files.length > 0) {
-        const node = new DiffNode(
-          `${diffStats.files.length} file(s) changed vs ${diffStats.baseBranch}  +${diffStats.totalAdditions} -${diffStats.totalDeletions}`,
-          repo.path,
-          diffStats,
-          repo.id
-        );
-        children.push(node);
-      }
-    } catch {
-      // diff failed (e.g. no base branch), skip
+    // Diff vs base branch — await the parallel promise
+    const diffStats = await diffPromise;
+    if (diffStats && diffStats.files.length > 0) {
+      const node = new DiffNode(
+        `${diffStats.files.length} file(s) changed vs ${diffStats.baseBranch}  +${diffStats.totalAdditions} -${diffStats.totalDeletions}`,
+        repo.path,
+        diffStats,
+        repo.id
+      );
+      children.push(node);
     }
 
     return children;

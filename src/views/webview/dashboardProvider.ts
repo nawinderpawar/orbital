@@ -138,21 +138,29 @@ export class DashboardProvider {
     if (!this.panel) {return;}
 
     const repos = this.dataStore.getRepos();
-    const views: RepoViewWithDiff[] = [];
 
-    for (const entry of repos) {
-      const status = await this.gitService.getStatus(entry.path);
-      let diffStats: DiffStats | null = null;
-      let branches: string[] = [];
-      try {
-        const baseBranch = entry.baseBranch || await this.gitService.getDefaultBranch(entry.path);
-        diffStats = await this.gitService.getDiffStats(entry.path, baseBranch, true);
-        branches = await this.gitService.listBranches(entry.path);
-      } catch {
-        // diff not available
-      }
-      views.push({ entry, status, diffStats, branches });
-    }
+    // Fetch all repos in parallel
+    const views: RepoViewWithDiff[] = await Promise.all(
+      repos.map(async (entry) => {
+        const [status, branchesResult] = await Promise.allSettled([
+          this.gitService.getStatus(entry.path),
+          this.gitService.listBranches(entry.path),
+        ]);
+
+        const repoStatus = status.status === 'fulfilled' ? status.value : null;
+        const branches = branchesResult.status === 'fulfilled' ? branchesResult.value : [];
+
+        let diffStats: DiffStats | null = null;
+        try {
+          const baseBranch = entry.baseBranch || await this.gitService.getDefaultBranch(entry.path);
+          diffStats = await this.gitService.getDiffStats(entry.path, baseBranch, true);
+        } catch {
+          // diff not available
+        }
+
+        return { entry, status: repoStatus, diffStats, branches };
+      })
+    );
 
     this.panel.webview.html = this.buildHtml(views);
   }
