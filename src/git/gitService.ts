@@ -40,7 +40,7 @@ function git(repoPath: string, args: string[], timeoutMs = 10000): Promise<strin
 export class GitService {
   // Caches with TTL
   private defaultBranchCache = new Map<string, { value: string; expiresAt: number }>();
-  private branchListCache = new Map<string, { value: string[]; expiresAt: number }>();
+  private branchListCache = new Map<string, { value: { local: string[]; remote: string[] }; expiresAt: number }>();
 
   private static DEFAULT_BRANCH_TTL = 5 * 60 * 1000;  // 5 minutes
   private static BRANCH_LIST_TTL = 2 * 60 * 1000;     // 2 minutes
@@ -288,16 +288,30 @@ export class GitService {
     return files;
   }
 
-  /** List all local branches — cached */
-  async listBranches(repoPath: string): Promise<string[]> {
+  /** List all local and remote-tracking branches — cached */
+  async listBranches(repoPath: string): Promise<{ local: string[]; remote: string[] }> {
     const cached = this.branchListCache.get(repoPath);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.value;
     }
 
-    const output = await git(repoPath, ['branch', '--format=%(refname:short)']);
-    const branches = output ? output.split('\n').map((b) => b.trim()).filter((b) => b.length > 0) : [];
-    this.branchListCache.set(repoPath, { value: branches, expiresAt: Date.now() + GitService.BRANCH_LIST_TTL });
-    return branches;
+    const [localOutput, remoteOutput] = await Promise.allSettled([
+      git(repoPath, ['branch', '--format=%(refname:short)']),
+      git(repoPath, ['branch', '-r', '--format=%(refname:short)']),
+    ]);
+
+    const local = localOutput.status === 'fulfilled' && localOutput.value
+      ? localOutput.value.split('\n').map((b) => b.trim()).filter((b) => b.length > 0)
+      : [];
+
+    const remote = remoteOutput.status === 'fulfilled' && remoteOutput.value
+      ? remoteOutput.value.split('\n')
+          .map((b) => b.trim())
+          .filter((b) => b.length > 0 && !b.includes('/HEAD'))
+      : [];
+
+    const result = { local, remote };
+    this.branchListCache.set(repoPath, { value: result, expiresAt: Date.now() + GitService.BRANCH_LIST_TTL });
+    return result;
   }
 }

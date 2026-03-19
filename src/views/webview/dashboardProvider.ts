@@ -6,7 +6,7 @@ import { RepoView, DiffStats } from '../../types';
 
 interface RepoViewWithDiff extends RepoView {
   diffStats?: DiffStats | null;
-  branches?: string[];
+  branches?: { local: string[]; remote: string[] };
 }
 
 export class DashboardProvider {
@@ -148,7 +148,7 @@ export class DashboardProvider {
         ]);
 
         const repoStatus = status.status === 'fulfilled' ? status.value : null;
-        const branches = branchesResult.status === 'fulfilled' ? branchesResult.value : [];
+        const branches = branchesResult.status === 'fulfilled' ? branchesResult.value : { local: [], remote: [] };
 
         let diffStats: DiffStats | null = null;
         try {
@@ -843,17 +843,25 @@ export class DashboardProvider {
 
   private buildDiffSection(rv: RepoViewWithDiff): string {
     const { entry, diffStats } = rv;
-    const branches = rv.branches || [];
+    const branchInfo = rv.branches || { local: [], remote: [] };
+    const allBranches = [...branchInfo.local, ...branchInfo.remote];
 
     // Always show the section if we have branches (so user can switch back)
-    if (!diffStats && branches.length === 0) {
+    if (!diffStats && allBranches.length === 0) {
       return '';
     }
 
     const currentBase = diffStats?.baseBranch || entry.baseBranch || 'main';
-    const branchOptions = branches.map((b) =>
+    const localOptions = branchInfo.local.map((b) =>
       `<option value="${this.escHtml(b)}" ${b === currentBase ? 'selected' : ''}>${this.escHtml(b)}</option>`
     ).join('');
+    const remoteOptions = branchInfo.remote.map((b) =>
+      `<option value="${this.escHtml(b)}" ${b === currentBase ? 'selected' : ''}>${this.escHtml(b)}</option>`
+    ).join('');
+    const branchSelectHtml = `
+      <optgroup label="Local">${localOptions}</optgroup>
+      ${remoteOptions ? `<optgroup label="Remote">${remoteOptions}</optgroup>` : ''}
+    `;
 
     const hasFiles = diffStats && diffStats.files.length > 0;
 
@@ -897,7 +905,7 @@ export class DashboardProvider {
         </div>
         <div class="diff-header-actions">
           <select class="diff-branch-select" onchange="changeBaseBranch('${entry.id}', this)" title="Base branch for diff">
-            ${branchOptions}
+            ${branchSelectHtml}
           </select>
           ${hasFiles ? `<button class="diff-full-btn" onclick="viewDiff('${entry.id}')" title="Open full diff view">🔍 Full Diff</button>` : ''}
         </div>

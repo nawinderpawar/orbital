@@ -203,9 +203,9 @@ export function registerCommands(
       const repo = dataStore.getRepo(repoId);
       if (!repo) {return;}
 
-      let branches: string[];
+      let branchInfo: { local: string[]; remote: string[] };
       try {
-        branches = await gitService.listBranches(repo.path);
+        branchInfo = await gitService.listBranches(repo.path);
       } catch {
         vscode.window.showErrorMessage('Failed to list branches.');
         return;
@@ -213,19 +213,31 @@ export function registerCommands(
 
       const currentBase = repo.baseBranch || await gitService.getDefaultBranch(repo.path);
 
-      // Build pick items: auto-detect first, then all branches
-      const pickLabels: string[] = [
-        !repo.baseBranch ? '✓ Auto-detect (main/master)' : 'Auto-detect (main/master)',
-        ...branches.map((b) => b === currentBase ? `✓ ${b}` : b),
+      // Build pick items: auto-detect, then local, then remote
+      const items: vscode.QuickPickItem[] = [
+        {
+          label: !repo.baseBranch ? '✓ Auto-detect (main/master)' : 'Auto-detect (main/master)',
+          description: !repo.baseBranch ? '(current)' : '',
+        },
+        { label: 'Local', kind: vscode.QuickPickItemKind.Separator },
+        ...branchInfo.local.map((b) => ({
+          label: b === currentBase ? `✓ ${b}` : b,
+          description: b === currentBase ? '(current)' : '',
+        })),
+        { label: 'Remote', kind: vscode.QuickPickItemKind.Separator },
+        ...branchInfo.remote.map((b) => ({
+          label: b === currentBase ? `✓ ${b}` : b,
+          description: b === currentBase ? '(current)' : '',
+        })),
       ];
 
-      const pick = await vscode.window.showQuickPick(pickLabels, {
+      const pick = await vscode.window.showQuickPick(items, {
         placeHolder: `Base branch for diffs — currently: ${currentBase}`,
       });
-      if (!pick) {return;}
+      if (!pick || pick.kind === vscode.QuickPickItemKind.Separator) {return;}
 
       // Parse selection
-      const selected = pick.replace(/^✓ /, '');
+      const selected = pick.label.replace(/^✓ /, '');
       if (selected.startsWith('Auto-detect')) {
         dataStore.setBaseBranch(repoId, undefined);
       } else {
