@@ -47,16 +47,38 @@ All data is stored in `~/.orbital/data.json`. This file is portable — copy it 
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v18 or later
+- [Node.js](https://nodejs.org/) v18 or later (with npm)
 - [Git](https://git-scm.com/)
 - [Visual Studio Code](https://code.visualstudio.com/) v1.85 or later
 
-### Build from source
+**Verify Prerequisites:**
 
 ```bash
-cd c:\src\orbital
+node --version    # Should output v18.x or higher
+npm --version     # Should output 9.x or higher
+git --version     # Should output 2.x or higher
+```
+
+If any tool is missing, download and install it from the links above.
+
+### Build from source
+
+1. Install dependencies (run once):
+```bash
+cd c:\orbital\orbital
 npm install
+```
+
+2. Compile the TypeScript source to JavaScript:
+```bash
 npm run compile
+```
+
+This generates the compiled JavaScript in the `out/` directory. You should see no errors in the console.
+
+3. Verify the build completed successfully:
+```bash
+ls out/extension.js    # Should exist and contain compiled code
 ```
 
 ### Install in VS Code
@@ -68,7 +90,7 @@ npm run compile
 npm install -g @vscode/vsce
 
 # Package the extension
-cd c:\src\orbital
+cd c:\orbital\orbital
 vsce package
 
 # This creates orbital-0.1.0.vsix in the project root
@@ -94,7 +116,7 @@ On Windows (run as Administrator):
 # Create a symlink in the VS Code extensions folder
 New-Item -ItemType SymbolicLink `
   -Path "$env:USERPROFILE\.vscode\extensions\orbital" `
-  -Target "c:\src\orbital"
+  -Target "c:\orbital\orbital"
 ```
 
 On macOS/Linux:
@@ -107,14 +129,14 @@ Then reload VS Code (**Developer: Reload Window**). The extension will load dire
 
 #### Option 3: Extension Development Host (F5)
 
-1. Open `c:\src\orbital` in VS Code
+1. Open `c:\orbital\orbital` in VS Code
 2. Press **F5** to launch a new VS Code window with the extension loaded
 3. Changes are picked up on each re-launch (or use `npm run watch` for live recompilation)
 
 ## Development
 
 ```bash
-cd c:\src\orbital
+cd c:\orbital\orbital
 npm install
 npm run compile          # one-time build
 npm run watch            # continuous build on file changes
