@@ -63,82 +63,95 @@ If any tool is missing, download and install it from the links above.
 
 ### Build from source
 
-1. Install dependencies (run once):
+1. Clone the repository and navigate to the project directory:
 ```bash
-cd c:\orbital\orbital
+git clone https://github.com/nawinderpawar/orbital.git
+cd orbital
+```
+
+2. Install dependencies (run once):
+```bash
 npm install
 ```
 
-2. Compile the TypeScript source to JavaScript:
+3. Compile the TypeScript source to JavaScript:
 ```bash
 npm run compile
 ```
 
 This generates the compiled JavaScript in the `out/` directory. You should see no errors in the console.
 
-3. Verify the build completed successfully:
+4. Verify the build completed successfully:
 ```bash
-ls out/extension.js    # Should exist and contain compiled code
+# On Windows:
+dir out\extension.js
+
+# On macOS/Linux:
+ls out/extension.js
 ```
 
 ### Install in VS Code
 
 #### Option 1: Package as VSIX (recommended)
 
+1. Install the VS Code Extension packaging tool (one-time):
 ```bash
-# Install the VS Code Extension packaging tool (one-time)
 npm install -g @vscode/vsce
-
-# Package the extension
-cd c:\orbital\orbital
-vsce package
-
-# This creates orbital-0.1.0.vsix in the project root
 ```
 
-Then install the `.vsix` in VS Code:
-
-- Open VS Code → **Extensions** sidebar (Ctrl+Shift+X)
-- Click **⋯** (top-right of Extensions panel) → **Install from VSIX...**
-- Select the generated `orbital-0.1.0.vsix` file
-
-Or from the command line:
-
+2. Package the extension:
 ```bash
-code --install-extension orbital-0.1.0.vsix
+vsce package
 ```
+
+This creates `orbital-0.1.0.vsix` in the project root.
+
+3. Install the `.vsix` in VS Code:
+   - Open VS Code → **Extensions** sidebar (Ctrl+Shift+X)
+   - Click **⋯** (top-right of Extensions panel) → **Install from VSIX...**
+   - Select the generated `orbital-0.1.0.vsix` file
+
+   Or from the command line:
+   ```bash
+   code --install-extension orbital-0.1.0.vsix
+   ```
 
 #### Option 2: Symlink for development
 
 On Windows (run as Administrator):
 
 ```powershell
+# Get the full path to the project directory
+$projectPath = (Get-Location).Path
+
 # Create a symlink in the VS Code extensions folder
 New-Item -ItemType SymbolicLink `
   -Path "$env:USERPROFILE\.vscode\extensions\orbital" `
-  -Target "c:\orbital\orbital"
+  -Target $projectPath
 ```
 
 On macOS/Linux:
 
 ```bash
-ln -s /path/to/orbital ~/.vscode/extensions/orbital
+# From the project directory:
+ln -s "$(pwd)" ~/.vscode/extensions/orbital
 ```
 
 Then reload VS Code (**Developer: Reload Window**). The extension will load directly from source — useful during development.
 
 #### Option 3: Extension Development Host (F5)
 
-1. Open `c:\orbital\orbital` in VS Code
+1. Open the project folder in VS Code
 2. Press **F5** to launch a new VS Code window with the extension loaded
 3. Changes are picked up on each re-launch (or use `npm run watch` for live recompilation)
 
 ## Development
 
+From the project directory:
+
 ```bash
-cd c:\orbital\orbital
-npm install
-npm run compile          # one-time build
-npm run watch            # continuous build on file changes
-# Press F5 in VS Code to launch Extension Development Host
+npm install                # Install dependencies
+npm run compile            # One-time build
+npm run watch              # Continuous build on file changes
+# Then press F5 in VS Code to launch Extension Development Host
 ```
